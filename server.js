@@ -116,11 +116,20 @@ app.get('/api/users', (req, res) => {
     const { name } = req.query;
     let sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id";
     const params = [];
-    if (name) { sql += " WHERE u.name LIKE ?"; params.push(`%${name}%`); }
+
+    if (name) {
+        sql += " WHERE u.name LIKE ?";
+        params.push(`%${name}%`);
+    }
+
     sql += " ORDER BY u.name";
+
     db.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        // ▼▼▼ データを {"users": ...} で包んで返す ▼▼▼
+        res.json({ users: rows });
     });
 });
 app.post('/api/users', (req, res) => {
