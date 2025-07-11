@@ -9,7 +9,7 @@
 <body>
 <div class="container">
     <h1>ユーザー管理</h1>
-    <p><a href="/pcs.html">PC管理へ</a> | <a href="/class-slots.html">コマ管理へ</a> | <a href="/schedule-admin.html">スケジュール管理へ</a></p>
+    <p><a href="/index.html">トップページへ</a></p>
 
     <div class="form-container">
         <h2>新規ユーザー登録</h2>
@@ -18,11 +18,13 @@
             <input type="text" id="name" placeholder="名前" required>
             <input type="email" id="email" placeholder="メールアドレス (任意)">
             <select id="user-level" required>
-                <option value="通常">通常</option>
+                <option value="基礎">基礎</option>
+                <option value="初級">初級</option>
+                <option value="中級">中級</option>
                 <option value="上級">上級</option>
             </select>
             <select id="default-pc" required>
-                <option value="">希望PCを選択...</option>
+                <option value="">PCを選択...</option>
             </select>
             <button type="submit">登録する</button>
         </form>
@@ -38,7 +40,7 @@
                 <th>名前</th>
                 <th>レベル</th>
                 <th>メールアドレス</th>
-                <th>希望PC</th>
+                <th>PC</th>
                 <th>操作</th>
             </tr>
             </thead>
@@ -70,7 +72,7 @@
                 </select>
             </div>
             <div class="form-group">
-                <label for="edit-default-pc">希望PC:</label>
+                <label for="edit-default-pc">PC:</label>
                 <select id="edit-default-pc"></select>
             </div>
             <button type="submit">保存</button>
