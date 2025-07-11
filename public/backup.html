@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>データ管理</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .danger-zone { border: 2px solid #fa383e; }
+        .danger-zone h2 { color: #fa383e; }
+        #import-form { display: flex; align-items: center; gap: 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>データのエクスポートとインポート</h1>
+        <p><a href="/">ポータルへ戻る</a></p>
+
+        <div class="form-container">
+            <h2>データのエクスポート</h2>
+            <p>現在のデータベースの全情報をバックアップファイルとしてダウンロードします。</p>
+            <button id="export-btn">エクスポート実行</button>
+        </div>
+
+        <div class="form-container danger-zone">
+            <h2>データのインポート</h2>
+            <p><strong>【警告】この操作は元に戻せません。</strong></p>
+            <p>バックアップファイルをアップロードすると、現在のデータベースは<strong>全て削除され</strong>、ファイルの内容で上書きされます。</p>
+            <form id="import-form">
+                <input type="file" id="backup-file-input" accept=".zip" required>
+                <button type="submit">インポート実行</button>
+            </form>
+            <p id="import-message" class="message"></p>
+        </div>
+    </div>
+    <script src="backup.js"></script>
+</body>
+</html>

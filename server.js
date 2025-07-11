@@ -6,6 +6,12 @@ const path = require('path');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const cookieParser = require('cookie-parser');
+const archiver = require('archiver'); 
+const unzipper = require('unzipper');
+const csv = require('csv-parser');
+const multer = require('multer');
+const fs = require('fs');
+const upload = multer({ dest: 'uploads/' }); 
 
 const app = express();
 const port = 3000;
@@ -19,7 +25,18 @@ db.serialize(() => {
     db.run(`CREATE TABLE IF NOT EXISTS pcs (pc_id TEXT PRIMARY KEY, pc_name TEXT NOT NULL, notes TEXT)`);
     db.run(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, user_level TEXT DEFAULT '通常', default_pc_id TEXT, FOREIGN KEY (default_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
     db.run(`CREATE TABLE IF NOT EXISTS class_slots (slot_id INTEGER PRIMARY KEY, day_of_week INTEGER NOT NULL, period INTEGER NOT NULL, slot_name TEXT NOT NULL UNIQUE, start_time TEXT, end_time TEXT)`);
-    db.run(`CREATE TABLE IF NOT EXISTS schedules (schedule_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, class_date TEXT NOT NULL, slot_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT '通常', assigned_pc_id TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE, FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
+    db.run(`CREATE TABLE IF NOT EXISTS schedules (
+        schedule_id INTEGER PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        class_date TEXT NOT NULL,
+        slot_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT '通常',
+        assigned_pc_id TEXT,
+        notes TEXT, -- ▼▼▼ この行を追記 ▼▼▼
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+        FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE,
+        FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL
+    )`);
     db.run(`CREATE TABLE IF NOT EXISTS entry_logs (log_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, log_time TEXT NOT NULL, log_type TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`);
 });
 
@@ -60,8 +77,6 @@ app.post('/api/logout', (req, res) => {
     });
 });
 
-// --- ▼▼▼ ここが最重要の変更点：絶対的検問所の設置 ▼▼▼ ---
-
 // まず、全てのアクセスに対する検問所を設置する
 app.use((req, res, next) => {
     // ログインページ自体や、そのページの動作に必要なファイルは、チェックせず通す
@@ -76,7 +91,7 @@ app.use((req, res, next) => {
         return next(); // 許可証あり、通れ
     }
 
-    // 許可証なし、容赦なくログインページへ送り返す
+    // 許可証なし、ログインページへ送り返す
     res.redirect('/login.html');
 });
 
@@ -175,12 +190,6 @@ app.post('/api/pcs', (req, res) => {
     });
 });
 
-app.get('/api/pcs', (req, res) => {
-    db.all("SELECT * FROM pcs ORDER BY pc_id", [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
-});
 
 app.put('/api/pcs/:id', (req, res) => {
     const { pc_name, notes } = req.body;
@@ -214,11 +223,24 @@ app.post('/api/class_slots', (req, res) => {
 });
 
 app.get('/api/class_slots', (req, res) => {
-    db.all("SELECT * FROM class_slots ORDER BY day_of_week, period", [], (err, rows) => {
+    const { dayOfWeek } = req.query; //曜日をクエリパラメータで受け取る
+    
+    let sql = "SELECT * FROM class_slots";
+    const params = [];
+
+    if (dayOfWeek) {
+        sql += " WHERE day_of_week = ?";
+        params.push(dayOfWeek);
+    }
+
+    sql += " ORDER BY day_of_week, period";
+
+    db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows);
     });
 });
+
 app.put('/api/class_slots/:id', (req, res) => {
     const { day_of_week, period, slot_name, start_time, end_time } = req.body;
     if (day_of_week == null || !period || !slot_name) return res.status(400).json({ error: "曜日、時限、コマ名は必須です。" });
@@ -241,34 +263,179 @@ app.delete('/api/class_slots/:id', (req, res) => {
 });
 // ... 他のコマ用API(PUT, DELETE)も同様に作成 ...
 
+/**
+ * API: 全データのCSVエクスポート (ZIP圧縮)
+ * GET /api/export
+ */
+app.get('/api/export', (req, res) => {
+    const timestamp = new Date().toISOString().replace(/:/g, '-');
+    const zipFileName = `backup-${timestamp}.zip`;
 
+    // ダウンロード用のヘッダーを設定
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename=${zipFileName}`);
+
+    const archive = archiver('zip', {
+        zlib: { level: 9 } // 圧縮レベルを最大に設定
+    });
+
+    // エラーハンドリング
+    archive.on('error', function(err) {
+        throw err;
+    });
+
+    // レスポンスにZIPストリームをパイプ
+    archive.pipe(res);
+
+    const tables = ['admins', 'pcs', 'users', 'class_slots', 'schedules', 'entry_logs'];
+    let completed = 0;
+
+    // 各テーブルを非同期で処理
+    tables.forEach(table => {
+        db.all(`SELECT * FROM ${table}`, [], (err, rows) => {
+            if (err) {
+                console.error(`テーブル ${table} のエクスポートエラー:`, err);
+                // エラーが発生しても処理を続行し、最終的にZIPを閉じる
+            } else if (rows.length > 0) {
+                // JSONからCSVへの変換
+                const keys = Object.keys(rows[0]);
+                const header = keys.join(',') + '\n';
+                const csvRows = rows.map(row => {
+                    return keys.map(key => {
+                        let val = row[key];
+                        if (val === null || val === undefined) {
+                            return '';
+                        }
+                        // カンマやダブルクォートを含む場合はダブルクォートで囲む
+                        val = val.toString();
+                        if (val.includes(',') || val.includes('"')) {
+                            return `"${val.replace(/"/g, '""')}"`;
+                        }
+                        return val;
+                    }).join(',');
+                }).join('\n');
+                
+                const csvData = header + csvRows;
+                // CSVデータをファイルとしてZIPに追加
+                archive.append(csvData, { name: `${table}.csv` });
+            }
+
+            completed++;
+            // 全てのテーブルの処理が終わったらZIPをファイナライズ
+            if (completed === tables.length) {
+                archive.finalize();
+            }
+        });
+    });
+});
+/**
+ * API: 全データのインポート (ZIP形式のCSVファイルから)
+ * POST /api/import
+ */
+app.post('/api/import', upload.single('backupFile'), (req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'バックアップファイルがアップロードされていません。' });
+    }
+
+    const filePath = req.file.path;
+    const importData = {};
+    const tablesInOrder = ['admins', 'pcs', 'users', 'class_slots', 'schedules', 'entry_logs'];
+
+    fs.createReadStream(filePath)
+        .pipe(unzipper.Parse())
+        .on('entry', function (entry) {
+            const tableName = entry.path.replace('.csv', '');
+            if (tablesInOrder.includes(tableName)) {
+                importData[tableName] = [];
+                entry.pipe(csv()).on('data', (data) => importData[tableName].push(data));
+            } else {
+                entry.autodrain();
+            }
+        })
+        .on('finish', () => {
+            db.serialize(() => {
+                let transactionError = null;
+
+                db.run("BEGIN TRANSACTION");
+
+                // 既存データを全て削除
+                ['entry_logs', 'schedules', 'users', 'class_slots', 'pcs', 'admins'].forEach(table => {
+                    db.run(`DELETE FROM ${table}`, (err) => { if(err) transactionError = err; });
+                });
+                db.run("DELETE FROM sqlite_sequence", (err) => { /* このエラーは無視してよい */ });
+                
+                // 新しいデータを挿入
+                tablesInOrder.forEach(table => {
+                    if (transactionError) return;
+                    const records = importData[table];
+                    if (records && records.length > 0) {
+                        const keys = Object.keys(records[0]);
+                        const placeholders = keys.map(() => '?').join(',');
+                        const sql = `INSERT INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`;
+                        const stmt = db.prepare(sql, (err) => { if(err) transactionError = err; });
+                        
+                        records.forEach(record => {
+                            const values = keys.map(key => record[key] === '' ? null : record[key]);
+                            stmt.run(values, (err) => { if(err) transactionError = err; });
+                        });
+                        
+                        // ▼▼▼ このfinalizeにコールバックを追加するのが重要 ▼▼▼
+                        stmt.finalize((err) => { if(err) transactionError = err; });
+                    }
+                });
+
+                // トランザクションを完了
+                db.run(transactionError ? "ROLLBACK" : "COMMIT", (err) => {
+                    fs.unlinkSync(filePath); // 一時ファイルを削除
+                    if (transactionError) {
+                        return res.status(400).json({ error: `インポート失敗: ${transactionError.message}` });
+                    }
+                    if (err) {
+                        return res.status(500).json({ error: "トランザクションのコミットに失敗しました。" });
+                    }
+                    res.json({ message: "データのインポートが正常に完了しました。" });
+                });
+            });
+        })
+        .on('error', (err) => {
+             fs.unlinkSync(filePath);
+             res.status(500).json({ error: `ZIPファイルの展開中にエラーが発生しました: ${err.message}` });
+        });
+});
 // --- スケジュール (schedules) API ---
 
 // 【強化版】スケジュールを取得（日付範囲、ステータスでの絞り込みに対応）
 app.get('/api/schedules', (req, res) => {
-    // name を受け取れるようにする
-    const { startDate, endDate, status, userId, name } = req.query;
-
+    // ▼▼▼ `date` をクエリパラメータとして受け取る ▼▼▼
+    const { date, startDate, endDate, status, userId, name } = req.query;
+    
     let sql = `
         SELECT s.schedule_id, s.class_date, s.status,
                u.user_id, u.name as user_name,
                c.slot_id, c.slot_name,
                p.pc_id as assigned_pc_id, p.pc_name
         FROM schedules s
-                 JOIN users u ON s.user_id = u.user_id
-                 JOIN class_slots c ON s.slot_id = c.slot_id
-                 LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
+        JOIN users u ON s.user_id = u.user_id
+        JOIN class_slots c ON s.slot_id = c.slot_id
+        LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
     `;
     const params = [];
     const conditions = [];
 
-    if (startDate) {
-        conditions.push("s.class_date >= ?");
-        params.push(startDate);
-    }
-    if (endDate) {
-        conditions.push("s.class_date <= ?");
-        params.push(endDate);
+    // ▼▼▼ `date`パラメータを処理するロジックを追加 ▼▼▼
+    if (date) {
+        conditions.push("s.class_date = ?");
+        params.push(date);
+    } else {
+        // 従来の範囲指定
+        if (startDate) {
+            conditions.push("s.class_date >= ?");
+            params.push(startDate);
+        }
+        if (endDate) {
+            conditions.push("s.class_date <= ?");
+            params.push(endDate);
+        }
     }
     if (status) {
         conditions.push("s.status = ?");
@@ -296,24 +463,41 @@ app.get('/api/schedules', (req, res) => {
 
 // スケジュールを一件登録 (振替用)
 app.post('/api/schedules', (req, res) => {
-    const { user_id, class_date, slot_id, status, assigned_pc_id } = req.body;
+    // ▼▼▼ notes を受け取る ▼▼▼
+    const { user_id, class_date, slot_id, status, assigned_pc_id, notes } = req.body;
     if (!user_id || !class_date || !slot_id || !status) return res.status(400).json({ error: "必須項目が不足しています。" });
-    const sql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, assigned_pc_id) VALUES (?, ?, ?, ?, ?)';
-    db.run(sql, [user_id, class_date, slot_id, status, assigned_pc_id], function(err) {
+    // ▼▼▼ notes をSQLに追加 ▼▼▼
+    const sql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, assigned_pc_id, notes) VALUES (?, ?, ?, ?, ?, ?)';
+    db.run(sql, [user_id, class_date, slot_id, status, assigned_pc_id, notes], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         res.status(201).json({ schedule_id: this.lastID });
     });
 });
 
-// 【実装】スケジュールを一件更新
+// スケジュールを一件更新
 app.put('/api/schedules/:id', (req, res) => {
-    const { class_date, slot_id, status, assigned_pc_id } = req.body;
+    // ▼▼▼ notes を受け取る ▼▼▼
+    const { class_date, slot_id, status, assigned_pc_id, notes } = req.body;
     if (!class_date || !slot_id || !status) return res.status(400).json({ error: "必須項目が不足しています。" });
-    const sql = 'UPDATE schedules SET class_date = ?, slot_id = ?, status = ?, assigned_pc_id = ? WHERE schedule_id = ?';
-    db.run(sql, [class_date, slot_id, status, assigned_pc_id, req.params.id], function(err) {
+    // ▼▼▼ notes をSQLに追加 ▼▼▼
+    const sql = 'UPDATE schedules SET class_date = ?, slot_id = ?, status = ?, assigned_pc_id = ?, notes = ? WHERE schedule_id = ?';
+    db.run(sql, [class_date, slot_id, status, assigned_pc_id, notes, req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
         if (this.changes === 0) return res.status(404).json({ error: "対象のスケジュールが見つかりません。" });
         res.status(200).json({ message: "スケジュールを更新しました。" });
+    });
+});
+app.get('/api/users/:id', (req, res) => {
+    const sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
+    db.get(sql, [req.params.id], (err, row) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (!row) {
+            // ここで404エラーを返すことで、フロントエンドは「ユーザーが見つからない」と判断できる
+            return res.status(404).json({ error: "ユーザーが見つかりません。" });
+        }
+        res.json(row);
     });
 });
 
@@ -325,7 +509,22 @@ app.delete('/api/schedules/:id', (req, res) => {
         res.status(200).json({ message: "スケジュールを削除しました。" });
     });
 });
-
+app.put('/api/schedules/:id/status', (req, res) => {
+    const { status } = req.body;
+    if (!status) {
+        return res.status(400).json({ error: "ステータスが指定されていません。" });
+    }
+    const sql = 'UPDATE schedules SET status = ? WHERE schedule_id = ?';
+    db.run(sql, [status, req.params.id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: "対象のスケジュールが見つかりません。" });
+        }
+        res.status(200).json({ message: "ステータスを正常に更新しました。" });
+    });
+});
 // --- 入退室ログ (entry_logs) API ---
 
 app.post('/api/entry_logs', (req, res) => {
@@ -339,7 +538,6 @@ app.post('/api/entry_logs', (req, res) => {
 });
 
 
-// --- サーバー起動 ---
 app.get('/api/live/current-class', (req, res) => {
     const now = new Date();
     const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
@@ -365,16 +563,6 @@ app.get('/api/live/current-class', (req, res) => {
         });
     });
 });
-
-
-// --- サーバー起動と終了処理 ---
-const server = app.listen(port, () => {
-    console.log(`サーバーがポート${port}で起動しました。`);
-});
-process.on('SIGINT', () => {
-    console.log("サーバーをシャットダウンします。");
-    server.close(() => db.close(() => process.exit(0)));
-});
 /**
  * API: 生徒の通常スケジュールを一括登録
  * POST /api/schedules/bulk
@@ -387,11 +575,9 @@ app.post('/api/schedules/bulk', (req, res) => {
         return res.status(400).json({ error: "必須項目が不足しています。" });
     }
 
-    // 1. 対象のコマ情報を取得
     db.get('SELECT * FROM class_slots WHERE slot_id = ?', [slot_id], (err, slot) => {
         if (err || !slot) return res.status(404).json({ error: "指定されたコマが見つかりません。" });
 
-        // 2. スケジュールを生成
         const schedulesToCreate = [];
         let currentDate = new Date(); // 今日から開始
         const endDate = new Date(term_end_date);
@@ -399,8 +585,13 @@ app.post('/api/schedules/bulk', (req, res) => {
 
         while (currentDate <= endDate) {
             if (currentDate.getDay() === targetDay) {
-                // YYYY-MM-DD形式にフォーマット
-                const dateString = currentDate.toISOString().split('T')[0];
+                // ▼▼▼ この日付フォーマット部分を修正 ▼▼▼
+                const year = currentDate.getFullYear();
+                const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+                const day = currentDate.getDate().toString().padStart(2, '0');
+                const dateString = `${year}-${month}-${day}`;
+                // ▲▲▲ toISOString()の使用をやめ、ローカル日付を直接使用 ▲▲▲
+                
                 schedulesToCreate.push([user_id, dateString, slot_id, '通常', pc_id]);
             }
             currentDate.setDate(currentDate.getDate() + 1);
@@ -410,21 +601,35 @@ app.post('/api/schedules/bulk', (req, res) => {
             return res.status(400).json({ error: "指定された期間に該当する授業日がありません。" });
         }
 
-        // 3. トランザクションで一括登録
         db.serialize(() => {
             db.run("BEGIN TRANSACTION");
-            const stmt = db.prepare('INSERT INTO schedules (user_id, class_date, slot_id, status, assigned_pc_id) VALUES (?, ?, ?, ?, ?)');
-            schedulesToCreate.forEach(schedule => {
-                stmt.run(schedule);
-            });
-            stmt.finalize((err) => {
-                if (err) {
-                    db.run("ROLLBACK");
-                    return res.status(500).json({ error: "スケジュールの一括登録中にエラーが発生しました。" });
-                }
-                db.run("COMMIT");
-                res.status(201).json({ message: `${schedulesToCreate.length}件の通常授業スケジュールを登録しました。` });
-            });
+            try {
+                db.run("DELETE FROM schedules WHERE user_id = ? AND status = '通常'", [user_id]);
+                const stmt = db.prepare('INSERT INTO schedules (user_id, class_date, slot_id, status, assigned_pc_id) VALUES (?, ?, ?, ?, ?)');
+                schedulesToCreate.forEach(schedule => {
+                    stmt.run(schedule);
+                });
+                stmt.finalize((err) => {
+                    if (err) throw err;
+                    db.run("COMMIT", (commitErr) => {
+                        if (commitErr) throw commitErr;
+                        res.status(201).json({ message: `${schedulesToCreate.length}件の通常授業スケジュールを登録しました。` });
+                    });
+                });
+            } catch(e) {
+                db.run("ROLLBACK");
+                res.status(500).json({ error: `一括登録中にエラーが発生しました: ${e.message}` });
+            }
         });
     });
 });
+
+// --- サーバー起動と終了処理 ---
+const server = app.listen(port, () => {
+    console.log(`サーバーがポート${port}で起動しました。`);
+});
+process.on('SIGINT', () => {
+    console.log("サーバーをシャットダウンします。");
+    server.close(() => db.close(() => process.exit(0)));
+});
+

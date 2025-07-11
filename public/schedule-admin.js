@@ -8,6 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const editForm = document.getElementById('edit-schedule-form');
     const closeModalBtn = editModal.querySelector('.close-btn');
     const editMessage = document.getElementById('edit-message');
+
+    const addScheduleBtn = document.getElementById('add-schedule-btn');
+    const addModal = document.getElementById('add-schedule-modal');
+    const addForm = document.getElementById('add-schedule-form');
+    const closeAddModalBtn = addModal.querySelector('.close-btn');
     let currentEditingScheduleId = null;
 
     // --- 関数定義 ---
@@ -54,10 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tr = document.createElement('tr');
                 tr.dataset.schedule = JSON.stringify(s);
                 tr.innerHTML = `
-                <td>${s.class_date}</td>
-                <td>${s.slot_name}</td>
-                <td>${s.user_name}</td>
-                <td><span class="status-${s.status.toLowerCase()}">${s.status}</span></td>
+           <td>${s.class_date}</td>
+            <td>${s.slot_name}</td>
+            <td>${s.user_name}</td>
+            <td><span class="status-${s.status.toLowerCase()}">${s.status}</span></td>
+            <td>${s.notes || ''}</td>
                 <td>${s.pc_name || 'N/A'}</td>
                 <td class="actions">
                     <button class="edit-btn">編集</button>
@@ -72,7 +78,31 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- イベントリスナー設定 ---
-
+    addScheduleBtn.addEventListener('click', () => {
+        addForm.reset();
+        addModal.style.display = 'block';
+    });
+        // 新規追加フォームの送信
+    addForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = {
+            user_id: document.getElementById('add-user-select').value,
+            class_date: document.getElementById('add-class-date').value,
+            slot_id: document.getElementById('add-slot-select').value,
+            status: document.getElementById('add-status-select').value,
+            notes: document.getElementById('add-notes').value,
+        };
+        try {
+            const response = await fetch('/api/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            });
+            if (!response.ok) throw new Error((await response.json()).error);
+            addModal.style.display = 'none';
+            fetchSchedules();
+        } catch (error) { alert(`追加失敗: ${error.message}`); }
+    });
     // 絞り込みフォームの送信
     filterForm.addEventListener('submit', (e) => {
         e.preventDefault();
@@ -105,8 +135,10 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-class-date').value = scheduleData.class_date;
             document.getElementById('edit-slot-select').value = scheduleData.slot_id;
             document.getElementById('edit-status-select').value = scheduleData.status;
-            document.getElementById('edit-pc-select').value = scheduleData.assigned_pc_id || '';
-            editMessage.textContent = '';
+            document.getElementById('edit-pc-select').value = scheduleData.assigned_pc_id || '';            
+             
+            // document.getElementById('edit-notes').value = scheduleData.notes || ''; // ▼ 備考をセット
+            editMessage.textContent = '';      
             editModal.style.display = 'block';
         }
     });
@@ -119,6 +151,7 @@ document.addEventListener('DOMContentLoaded', () => {
             slot_id: document.getElementById('edit-slot-select').value,
             status: document.getElementById('edit-status-select').value,
             assigned_pc_id: document.getElementById('edit-pc-select').value || null,
+            notes: document.getElementById('edit-notes').value 
         };
         try {
             const response = await fetch(`/api/schedules/${currentEditingScheduleId}`, {
@@ -137,11 +170,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // モーダルを閉じる
     closeModalBtn.onclick = () => { editModal.style.display = 'none'; };
-    window.onclick = (e) => { if (e.target == editModal) editModal.style.display = 'none'; };
+    window.onclick = (e) => {
+         if (e.target == addModal) addModal.style.display = 'none';
+         if (e.target == editModal) editModal.style.display = 'none'; 
+        };
 
     // --- 初期化処理 ---
-    const initialize = async () => {
+    const initialize = async () => {        
         await Promise.all([
+            populateSelect('/api/users', document.getElementById('add-user-select'),  'user_id', 'name', 'users'),
             populateSelect('/api/class_slots', document.getElementById('edit-slot-select'), 'slot_id', 'slot_name', 'コマ'),
             populateSelect('/api/pcs', document.getElementById('edit-pc-select'), 'pc_id', (item) => `${item.pc_id} (${item.pc_name})`, 'PC')
         ]);
