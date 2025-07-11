@@ -42,12 +42,6 @@ h1 {
     border: 1px solid #dddfe2;
     border-radius: 8px;
 }
-.form-container h3 {
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
-    border-bottom: none;
-}
-
 
 /* フォームの共通スタイル */
 form {
@@ -56,16 +50,11 @@ form {
     align-items: center;
 }
 form input[type="text"],
-form input[type="email"],
-form input[type="date"],
-form select {
+form input[type="email"] {
     padding: 10px;
     border: 1px solid #dddfe2;
     border-radius: 6px;
     font-size: 16px;
-    background-color: #ffffff;
-    box-sizing: border-box; /*
-    width: 100%; */
 }
 form button {
     padding: 10px 20px;
@@ -84,43 +73,61 @@ form button[type="submit"]:hover {
     background-color: #166fe5;
 }
 
-/* 振替管理UI用の追加スタイル */
-.student-search {
-    display: flex;
-    gap: 10px;
+/* ユーザー登録フォーム（グリッドレイアウト） */
+#user-form {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
 }
-.student-search input {
-    flex-grow: 1;
+#user-form button {
+    grid-column: -1 / -2; /* ボタンを右端に */
 }
-#student-search-results {
-    margin-top: 15px;
-    max-height: 200px;
-    overflow-y: auto;
+
+/* 絞り込みフォーム */
+#filter-form {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
-.search-result-item {
-    padding: 10px;
-    border: 1px solid #dddfe2;
-    border-radius: 6px;
-    margin-bottom: 5px;
-    cursor: pointer;
-    background-color: #fff;
+#reset-btn {
+    background-color: #6c757d;
 }
-.search-result-item:hover {
-    background-color: #f0f2f5;
+#reset-btn:hover {
+    background-color: #5a6268;
 }
-#roster-section {
-    margin-top: 20px;
+
+/* エラーメッセージ */
+.error {
+    color: #fa383e;
+    text-align: center;
+    min-height: 20px;
+    font-weight: bold;
+}
+
+/* ユーザー一覧リスト */
+#user-list {
+    list-style: none;
+    padding: 0;
+}
+#user-list li {
+    background: #f7f8fa;
     padding: 15px;
-    background-color: #e9ebee;
-    border-radius: 8px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    word-break: break-all;
 }
-#roster-list {
-    padding-left: 20px;
-    margin: 0;
+.user-info small {
+    color: #606770;
 }
+.actions button {
+    margin-left: 10px;
+}
+.edit-btn { background-color: #42b72a; }
+.edit-btn:hover { background-color: #36a420; }
+.delete-btn { background-color: #fa383e; }
+.delete-btn:hover { background-color: #e32b31; }
 
 
-/* テーブルコンテナ */
+/* 履歴一覧テーブル */
 .table-container {
     overflow-x: auto;
 }
@@ -143,35 +150,34 @@ tbody tr:nth-of-type(even) {
 tbody tr:hover {
     background-color: #f0f2f5;
 }
-.delete-btn, .edit-btn {
-    padding: 8px 12px;
-    border: none;
-    color: white;
-    border-radius: 6px;
-    cursor: pointer;
-}
-.delete-btn { background-color: #fa383e; }
-.delete-btn:hover { background-color: #e32b31; }
 
-/* メッセージ表示用のスタイル */
-.message {
-    text-align: center;
-    min-height: 20px;
+/* 編集用モーダル */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 100;
+    left: 0; top: 0;
+    width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.6);
+}
+.modal-content {
+    background-color: #ffffff;
+    margin: 10% auto;
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+}
+.modal-content form {
+    display: flex;
+    flex-direction: column;
+}
+.close-btn {
+    color: #aaa;
+    position: absolute;
+    top: 10px; right: 20px;
+    font-size: 28px;
     font-weight: bold;
-    padding: 10px;
-    margin-top: 10px;
-    border-radius: 6px;
-    display: none; /* 初期状態では非表示 */
-}
-.message.success {
-    display: block;
-    color: #155724;
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
-}
-.message.error {
-    display: block;
-    color: #721c24;
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
+    cursor: pointer;
 }

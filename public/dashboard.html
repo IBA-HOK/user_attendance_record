@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>入室履歴ダッシュボード</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>入室履歴ダッシュボード</h1>
+    <p><a href="/public">ユーザー管理画面へ</a></p>
+
+    <div class="form-container">
+        <h2>絞り込み検索</h2>
+        <form id="filter-form">
+            <input type="text" id="filter-user-id" placeholder="ユーザーID">
+            <input type="text" id="filter-name" placeholder="名前">
+            <input type="text" id="filter-slot" placeholder="コマ">
+            <button type="submit">絞り込み</button>
+            <button type="button" id="reset-btn">リセット</button>
+        </form>
+    </div>
+
+    <div class="form-container">
+        <h2>手動追加</h2>
+        <form id="manual-add-form">
+            <input type="text" id="add-user-id" placeholder="ユーザーID" required>
+            <input type="text" id="add-entry-time" placeholder="入室時間 (YYYY-MM-DDTHH:MM:SSZ)">
+            <button type="submit">追加</button>
+        </form>
+        <p id="add-error" class="error"></p>
+    </div>
+
+    <div class="table-container">
+        <h2>履歴一覧</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>ログID</th>
+                <th>ユーザーID</th>
+                <th>名前</th>
+                <th>コマ</th>
+                <th>入室時間</th>
+            </tr>
+            </thead>
+            <tbody id="logs-table-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="dashboard.js"></script>
+</body>
+</html>

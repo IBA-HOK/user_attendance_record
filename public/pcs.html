@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC管理</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>PC管理</h1>
+    <p><a href="/users.html">ユーザー管理へ</a> | <a href="/dashboard.html">ダッシュボードへ</a></p>
+
+    <div class="form-container">
+        <h2>新規PC追加</h2>
+        <form id="pc-form">
+            <input type="text" id="pc-id" placeholder="PC ID (例: PC-01)" required>
+            <input type="text" id="pc-name" placeholder="PC名 (例: 奥の席のWindows)" required>
+            <input type="text" id="pc-notes" placeholder="備考 (任意)">
+            <button type="submit">追加</button>
+        </form>
+        <p id="message" class="message"></p>
+    </div>
+
+    <div class="table-container">
+        <h2>PC一覧</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>PC ID</th>
+                <th>PC名</th>
+                <th>備考</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="pc-list-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="pcs.js"></script>
+</body>
+</html>

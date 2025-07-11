@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ユーザー管理</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="container">
+    <h1>ユーザー管理</h1>
+    <p><a href="/dashboard.html">ダッシュボードへ</a></p>
+
+    <div class="form-container">
+        <h2>新規ユーザー登録</h2>
+        <form id="user-form">
+            <input type="text" id="user-id" placeholder="ユーザーID" required>
+            <input type="text" id="name" placeholder="名前" required>
+            <input type="email" id="email" placeholder="メールアドレス (任意)">
+
+            <select id="user-level" required>
+                <option value="基礎">基礎</option>
+                <option value="初級">初級</option>
+                <option value="中級">中級</option>
+                <option value="上級">上級</option>
+            </select>
+
+            <select id="default-pc" required>
+                <option value="">希望PCを選択...</option>
+            </select>
+
+            <button type="submit">登録する</button>
+        </form>
+        <p id="message" class="message"></p>
+    </div>
+
+    <div class="table-container">
+        <h2>ユーザー一覧</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>名前</th>
+                <th>レベル</th>
+                <th>メールアドレス</th>
+                <th>希望PC</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="user-list-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="users.js"></script>
+</body>
+</html>
