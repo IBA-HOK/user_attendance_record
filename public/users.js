@@ -232,8 +232,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const initializePage = async () => {
         const pcTextFieldFn = (item) => `${item.pc_id} (${item.pc_name})`;
         await Promise.all([
-            populateSelect('/api/pcs', pcSelect, 'pc_id', pcTextFieldFn, '希望PCを選択'),
-            populateSelect('/api/pcs', editPcSelect, 'pc_id', pcTextFieldFn, '希望PCを選択'),
+            populateSelect('/api/pcs', pcSelect, 'pc_id', pcTextFieldFn, 'PCを選択'),
+            populateSelect('/api/pcs', editPcSelect, 'pc_id', pcTextFieldFn, 'PCを選択'),
             populateSelect('/api/class_slots', scheduleSlotSelect, 'slot_id', 'slot_name', 'コマを選択'),
             populateSelect('/api/pcs', schedulePcSelect, 'pc_id', pcTextFieldFn, '使用PCを選択')
         ]);
