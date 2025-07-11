@@ -11,12 +11,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const addScheduleBtn = document.getElementById('add-schedule-btn');
     const addModal = document.getElementById('add-schedule-modal');
+    const searchInput = document.getElementById('student-search-input');
+    const searchBtn = document.getElementById('student-search-btn');
+    const searchResults = document.getElementById('student-search-results');
     const addForm = document.getElementById('add-schedule-form');
     const closeAddModalBtn = addModal.querySelector('.close-btn');
     let currentEditingScheduleId = null;
 
     // --- 関数定義 ---
-
+    const searchStudents = async () => {
+        const query = searchInput.value.trim();
+        if (!query) return;
+        try {
+            const response = await fetch(`/api/users?name=${query}`);
+            const data = await response.json();
+            searchResults.innerHTML = '';
+            if (data.users && data.users.length > 0) {
+                data.users.forEach(user => {
+                    const div = document.createElement('div');
+                    div.className = 'search-result-item';
+                    div.textContent = `${user.name} (ID: ${user.user_id})`;
+                    div.dataset.userId = user.user_id;
+                    div.dataset.userName = user.name;
+                    searchResults.appendChild(div);
+                });
+            } else {
+                searchResults.textContent = '該当する生徒が見つかりません。';
+            }
+        } catch (error) {
+            console.error("生徒検索エラー:", error);
+        }
+    };
     // セレクトボックスをデータで満たす汎用関数
     const populateSelect = async (url, selectElement, valueField, textFieldFn, defaultText) => {
         try {
@@ -81,6 +106,10 @@ document.addEventListener('DOMContentLoaded', () => {
     addScheduleBtn.addEventListener('click', () => {
         addForm.reset();
         addModal.style.display = 'block';
+    });
+    searchBtn.addEventListener('click', searchStudents);
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') searchStudents();
     });
         // 新規追加フォームの送信
     addForm.addEventListener('submit', async (e) => {
