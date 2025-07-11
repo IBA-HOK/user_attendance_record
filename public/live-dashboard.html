@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>ライブ出席状況</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+    <h1>ライブ出席状況</h1>
+    <p><a href="/schedule-admin.html">スケジュール管理へ</a></p>
+
+    <div class="live-info-container">
+        <h2 id="current-class-info">データを取得中...</h2>
+        <p>（このページは15秒ごとに自動更新されます）</p>
+    </div>
+
+    <div id="attendee-list-container">
+    </div>
+</div>
+
+<script src="live-dashboard.js"></script>
+</body>
+</html>

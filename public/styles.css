@@ -48,7 +48,6 @@ h1 {
     border-bottom: none;
 }
 
-
 /* フォームの共通スタイル */
 form {
     display: grid;
@@ -58,14 +57,16 @@ form {
 form input[type="text"],
 form input[type="email"],
 form input[type="date"],
+form input[type="time"],
+form input[type="number"],
 form select {
     padding: 10px;
     border: 1px solid #dddfe2;
     border-radius: 6px;
     font-size: 16px;
     background-color: #ffffff;
-    box-sizing: border-box; /*
-    width: 100%; */
+    box-sizing: border-box;
+    width: 100%;
 }
 form button {
     padding: 10px 20px;
@@ -118,6 +119,16 @@ form button[type="submit"]:hover {
     padding-left: 20px;
     margin: 0;
 }
+.form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.form-group label {
+    font-weight: bold;
+    font-size: 14px;
+    color: #606770;
+}
 
 
 /* テーブルコンテナ */
@@ -143,7 +154,9 @@ tbody tr:nth-of-type(even) {
 tbody tr:hover {
     background-color: #f0f2f5;
 }
-.delete-btn, .edit-btn {
+
+/* ボタン類 */
+.delete-btn, .edit-btn, #reset-btn {
     padding: 8px 12px;
     border: none;
     color: white;
@@ -152,6 +165,10 @@ tbody tr:hover {
 }
 .delete-btn { background-color: #fa383e; }
 .delete-btn:hover { background-color: #e32b31; }
+.edit-btn { background-color: #42b72a; }
+.edit-btn:hover { background-color: #36a420; }
+#reset-btn { background-color: #6c757d; }
+#reset-btn:hover { background-color: #5a6268; }
 
 /* メッセージ表示用のスタイル */
 .message {
@@ -174,4 +191,101 @@ tbody tr:hover {
     color: #721c24;
     background-color: #f8d7da;
     border: 1px solid #f5c6cb;
+}
+
+/* スケジュール管理用のステータス表示スタイル */
+[class^="status-"] {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+}
+.status-通常 { background-color: #1877f2; }
+.status-振替 { background-color: #42b72a; }
+.status-欠席 { background-color: #6c757d; }
+/* public/styles.css の中から、既存の .modal と .modal-content の定義を探し出して、以下の内容で完全に置き換える */
+
+/* 編集用モーダル */
+.modal {
+    display: none; /* 初期状態では隠す */
+    position: fixed; /* 画面に固定する */
+    z-index: 100; /* 他の要素より手前に表示 */
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto; /* コンテンツが多ければスクロール */
+    background-color: rgba(0,0,0,0.6); /* 半透明の黒い背景 */
+}
+
+.modal-content {
+    background-color: #ffffff;
+    /* ▼▼▼ この margin が中央配置のキモだ ▼▼▼ */
+    margin: 15% auto; /* 上下は画面の15%分空け、左右は自動で中央揃え */
+    padding: 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+/* ライブダッシュボード用のスタイル */
+.live-info-container {
+    text-align: center;
+    margin-bottom: 30px;
+}
+#attendee-list-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 20px;
+}
+.attendee-card {
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+.attendee-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+.attendee-card.present {
+    background-color: #e8f5e9; /* 出席者は薄緑 */
+    border-left: 5px solid #4caf50;
+}
+.attendee-card.absent {
+    background-color: #fff3e0; /* 未入室者は薄橙 */
+    border-left: 5px solid #ff9800;
+}
+.attendee-card h3 {
+    margin-top: 0;
+    border-bottom: none;
+    padding-bottom: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+.attendee-card p {
+    margin: 5px 0;
+    color: #606770;
+}
+.attendance-status {
+    font-weight: bold;
+    font-size: 1.1em;
+    margin-top: 15px !important;
+}
+.attendee-card.present .attendance-status {
+    color: #388e3c;
+}
+.attendee-card.absent .attendance-status {
+    color: #f57c00;
+}
+.status-tag {
+    padding: 3px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+    background-color: #27ae60; /* 振替など */
 }

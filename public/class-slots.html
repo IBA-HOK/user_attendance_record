@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>授業コマ管理</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="container">
+    <h1>授業コマ管理</h1>
+    <p><a href="/users.html">ユーザー管理へ</a> | <a href="/pcs.html">PC管理へ</a> | <a href="/schedule-admin.html">スケジュール管理へ</a></p>
+
+    <div class="form-container">
+        <h2>新規コマ追加</h2>
+        <form id="slot-form">
+            <input type="text" id="slot-name" placeholder="コマ名 (例: 月曜1限)" required>
+            <select id="day-of-week" required>
+                <option value="">曜日を選択...</option>
+                <option value="1">月曜日</option>
+                <option value="2">火曜日</option>
+                <option value="3">水曜日</option>
+                <option value="4">木曜日</option>
+                <option value="5">金曜日</option>
+                <option value="6">土曜日</option>
+                <option value="0">日曜日</option>
+            </select>
+            <input type="number" id="period" placeholder="時限" min="1" required>
+            <input type="time" id="start-time" placeholder="開始時刻">
+            <input type="time" id="end-time" placeholder="終了時刻">
+            <button type="submit">追加</button>
+        </form>
+        <p id="message" class="message"></p>
+    </div>
+
+    <div class="table-container">
+        <h2>授業コマ一覧</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>コマ名</th>
+                <th>曜日</th>
+                <th>時限</th>
+                <th>開始時刻</th>
+                <th>終了時刻</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="slot-list-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+<script src="class-slots.js"></script>
+</body>
+</html>
