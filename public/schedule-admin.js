@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const addForm = document.getElementById('add-schedule-form');
     const closeAddModalBtn = addModal.querySelector('.close-btn');
     let currentEditingScheduleId = null;
+    let selectedStudent
 
     // --- 関数定義 ---
     const searchStudents = async () => {
@@ -115,7 +116,7 @@ document.addEventListener('DOMContentLoaded', () => {
     addForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = {
-            user_id: document.getElementById('add-user-select').value,
+            user_id: selectedStudent.id,
             class_date: document.getElementById('add-class-date').value,
             slot_id: document.getElementById('add-slot-select').value,
             status: document.getElementById('add-status-select').value,
@@ -171,7 +172,15 @@ document.addEventListener('DOMContentLoaded', () => {
             editModal.style.display = 'block';
         }
     });
-
+    searchResults.addEventListener('click', (e) => {
+        if (e.target.classList.contains('search-result-item')) {
+            selectedStudent = {
+                id: e.target.dataset.userId,
+                name: e.target.dataset.userName,
+            };
+            searchResults.innerHTML = ''; // 検索結果をクリア
+        }
+    });
     // 編集モーダルのフォーム送信
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -207,7 +216,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 初期化処理 ---
     const initialize = async () => {        
         await Promise.all([
-            populateSelect('/api/users', document.getElementById('add-user-select'),  'user_id', 'name', 'users'),
+            // populateSelect('/api/users', document.getElementById('add-user-select'),  'user_id', 'name', 'users'),
             populateSelect('/api/class_slots', document.getElementById('edit-slot-select'), 'slot_id', 'slot_name', 'コマ'),
             populateSelect('/api/pcs', document.getElementById('edit-pc-select'), 'pc_id', (item) => `${item.pc_id} (${item.pc_name})`, 'PC')
         ]);
