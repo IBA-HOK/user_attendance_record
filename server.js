@@ -1,203 +1,168 @@
-// server.js (Ultimate & Unabridged Edition)
+// server.js (True Final Gatekeeper Edition)
 
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
+const session = require('express-session');
+const bcrypt = require('bcrypt');
+const cookieParser = require('cookie-parser');
 
 const app = express();
 const port = 3000;
 
 // --- データベース設定 ---
-// 必ず古い management.db を削除してから起動すること
-const db = new sqlite3.Database('./management.db', (err) => {
-    if (err) {
-        console.error('データベース接続エラー:', err.message);
-        process.exit(1);
-    }
-    console.log('Wasshoi! 最終形態データベースへの接続に成功！');
-});
-
-// 5つのテーブルを全てセットアップ
+const db = new sqlite3.Database('./management.db');
+// (テーブル作成処理は変更なし)
 db.serialize(() => {
-    // 外部キー制約を有効にする
     db.run("PRAGMA foreign_keys = ON;");
-
-    // 1. pcs テーブル (先に作成)
-    db.run(`CREATE TABLE IF NOT EXISTS pcs (
-        pc_id TEXT PRIMARY KEY NOT NULL,
-        pc_name TEXT NOT NULL,
-        notes TEXT
-    )`);
-
-    // 2. users テーブル
-    db.run(`CREATE TABLE IF NOT EXISTS users (
-        user_id TEXT PRIMARY KEY NOT NULL,
-        name TEXT NOT NULL,
-        email TEXT,
-        user_level TEXT DEFAULT '通常',
-        default_pc_id TEXT,
-        FOREIGN KEY (default_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL
-    )`);
-
-    // 3. class_slots テーブル
-    db.run(`CREATE TABLE IF NOT EXISTS class_slots (
-        slot_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        day_of_week INTEGER NOT NULL, -- 0=日曜, 1=月曜...
-        period INTEGER NOT NULL,
-        slot_name TEXT NOT NULL UNIQUE,
-        start_time TEXT,
-        end_time TEXT
-    )`);
-
-    // 4. schedules テーブル
-    db.run(`CREATE TABLE IF NOT EXISTS schedules (
-        schedule_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        class_date TEXT NOT NULL,
-        slot_id INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT '通常', -- '通常', '振替', '欠席'
-        assigned_pc_id TEXT,
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-        FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE,
-        FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL
-    )`);
-
-    // 5. entry_logs テーブル
-    db.run(`CREATE TABLE IF NOT EXISTS entry_logs (
-        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        log_time TEXT NOT NULL,
-        log_type TEXT NOT NULL, -- 'entry' or 'exit'
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE
-    )`);
-
-    console.log("全5テーブルのセットアップを検証・完了しました。");
+    db.run(`CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)`);
+    db.run(`CREATE TABLE IF NOT EXISTS pcs (pc_id TEXT PRIMARY KEY, pc_name TEXT NOT NULL, notes TEXT)`);
+    db.run(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, user_level TEXT DEFAULT '通常', default_pc_id TEXT, FOREIGN KEY (default_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
+    db.run(`CREATE TABLE IF NOT EXISTS class_slots (slot_id INTEGER PRIMARY KEY, day_of_week INTEGER NOT NULL, period INTEGER NOT NULL, slot_name TEXT NOT NULL UNIQUE, start_time TEXT, end_time TEXT)`);
+    db.run(`CREATE TABLE IF NOT EXISTS schedules (schedule_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, class_date TEXT NOT NULL, slot_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT '通常', assigned_pc_id TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE, FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
+    db.run(`CREATE TABLE IF NOT EXISTS entry_logs (log_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, log_time TEXT NOT NULL, log_type TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`);
 });
 
-
-// --- ミドルウェア ---
+// --- ミドルウェア設定 ---
 app.use(express.json());
-app.use(express.static('public'));
+app.use(cookieParser());
+app.use(session({
+    secret: 'this-is-the-final-secret-key-for-our-castle-for-real',
+    resave: false,
+    saveUninitialized: false,
+    cookie: { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+}));
+
+
+// ==================================================================
+//  ルーティングとアクセス制御
+// ==================================================================
+
+// --- ログイン/ログアウトAPI (誰でもアクセス可能) ---
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    db.get('SELECT * FROM admins WHERE username = ?', [username], async (err, admin) => {
+        if (err || !admin) return res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
+        const match = await bcrypt.compare(password, admin.password_hash);
+        if (match) {
+            req.session.user = { id: admin.id, username: admin.username };
+            res.json({ success: true, redirectTo: '/' });
+        } else {
+            res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
+        }
+    });
+});
+app.post('/api/logout', (req, res) => {
+    req.session.destroy(err => {
+        if (err) return res.status(500).json({ error: "ログアウト失敗" });
+        res.clearCookie('connect.sid');
+        res.json({ success: true });
+    });
+});
+
+// --- ▼▼▼ ここが最重要の変更点：絶対的検問所の設置 ▼▼▼ ---
+
+// まず、全てのアクセスに対する検問所を設置する
+app.use((req, res, next) => {
+    // ログインページ自体や、そのページの動作に必要なファイルは、チェックせず通す
+    // (このリストにあるパスは、ログインしていなくてもアクセスできる)
+    const publicPaths = ['/login.html', '/login.js', '/styles.css'];
+    if (publicPaths.includes(req.path)) {
+        return next();
+    }
+
+    // それ以外の全てのアクセスに対して、セッション（許可証）を確認する
+    if (req.session.user) {
+        return next(); // 許可証あり、通れ
+    }
+
+    // 許可証なし、容赦なくログインページへ送り返す
+    res.redirect('/login.html');
+});
+
+// 検問所を抜けた者だけが、この先のファイルにアクセスできる
+app.use(express.static(path.join(__dirname, 'public')));
 
 
 // ==================================================================
 // APIエンドポイント
 // ==================================================================
 
+// --- ログイン/ログアウトAPI ---
+// app.post('/api/login', (req, res) => {
+//     const { username, password } = req.body;
+//     db.get('SELECT * FROM admins WHERE username = ?', [username], async (err, admin) => {
+//         if (err || !admin) return res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
+//         const match = await bcrypt.compare(password, admin.password_hash);
+//         if (match) {
+//             req.session.user = { id: admin.id, username: admin.username };
+//             res.json({ success: true });
+//         } else {
+//             res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
+//         }
+//     });
+// });
+// app.post('/api/logout', (req, res) => {
+//     req.session.destroy(err => {
+//         if (err) return res.status(500).json({ error: "ログアウト失敗" });
+//         res.clearCookie('connect.sid');
+//         res.json({ success: true });
+//     });
+// });
+
+
 // --- ユーザー (users) CRUD API ---
-
-app.post('/api/users', (req, res) => {
-    const { user_id, name, email, user_level, default_pc_id } = req.body;
-    if (!user_id || !name) return res.status(400).json({ error: "ユーザーIDと名前は必須です。" });
-    const sql = `INSERT INTO users (user_id, name, email, user_level, default_pc_id) VALUES (?, ?, ?, ?, ?)`;
-    db.run(sql, [user_id, name, email, user_level, default_pc_id], function(err) {
-        if (err) return res.status(400).json({ error: "そのユーザーIDは既に使用されています。" });
-        res.status(201).json({ user_id, name });
-    });
-});
-app.get('/api/live/current-class', (req, res) => {
-    const now = new Date();
-    // JSTに合わせる（サーバー環境に依存しないよう、明示的に+9時間）
-    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-
-    const dayOfWeek = jstNow.getUTCDay(); // 0=日曜, 1=月曜...
-    const currentTime = jstNow.getUTCHours().toString().padStart(2, '0') + ':' + jstNow.getUTCMinutes().toString().padStart(2, '0');
-    const todayDate = jstNow.toISOString().split('T')[0];
-
-    // 1. 現在時刻に合致するコマを見つける
-    const findSlotSql = `
-        SELECT * FROM class_slots 
-        WHERE day_of_week = ? AND start_time <= ? AND end_time > ? 
-        ORDER BY start_time DESC LIMIT 1
-    `;
-    db.get(findSlotSql, [dayOfWeek, currentTime, currentTime], (err, slot) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!slot) return res.json({ message: "現在、授業時間外です。" });
-
-        // 2. そのコマの出席予定者と、今日の入室ログを結合して取得
-        const getAttendeesSql = `
-            SELECT
-                s.user_id,
-                u.name,
-                s.status,
-                p.pc_name,
-                (SELECT log_time FROM entry_logs 
-                 WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time) = ? 
-                 ORDER BY log_time DESC LIMIT 1) as entry_log_time
-            FROM schedules s
-            JOIN users u ON s.user_id = u.user_id
-            LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
-            WHERE s.class_date = ? AND s.slot_id = ? AND s.status != '欠席'
-            ORDER BY u.name
-        `;
-        db.all(getAttendeesSql, [todayDate, todayDate, slot.slot_id], (err, attendees) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            res.json({
-                current_class: slot,
-                attendees: attendees.map(a => ({...a, is_present: !!a.entry_log_time }))
-            });
-        });
-    });
-});
-// server.js の修正後
-
-// server.js 内のこの部分を置き換え
-
 app.get('/api/users', (req, res) => {
     const { name } = req.query;
     let sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id";
     const params = [];
-
-    if (name) {
-        sql += " WHERE u.name LIKE ?";
-        params.push(`%${name}%`);
-    }
-
+    if (name) { sql += " WHERE u.name LIKE ?"; params.push(`%${name}%`); }
     sql += " ORDER BY u.name";
-
     db.all(sql, params, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
-        res.json({ users: rows }); // データ形式を { users: [...] } に統一
+        res.json(rows);
     });
 });
-
-app.get('/api/users/:id', (req, res) => {
-    const sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
-    db.get(sql, [req.params.id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!row) return res.status(404).json({ error: "ユーザーが見つかりません。" });
-        res.json(row);
+app.post('/api/users', (req, res) => {
+    const { user_id, name, email, user_level, default_pc_id } = req.body;
+    if (!user_id || !name) return res.status(400).json({ error: "IDと名前は必須" });
+    const sql = 'INSERT INTO users (user_id, name, email, user_level, default_pc_id) VALUES (?, ?, ?, ?, ?)';
+    db.run(sql, [user_id, name, email, user_level, default_pc_id], (err) => {
+        if (err) return res.status(400).json({ error: "IDが重複" });
+        res.status(201).json({ user_id });
     });
 });
-
 app.put('/api/users/:id', (req, res) => {
     const { name, email, user_level, default_pc_id } = req.body;
-    if (!name) return res.status(400).json({ error: "名前は必須です。" });
+    if (!name) return res.status(400).json({ error: "名前は必須" });
     const sql = `UPDATE users SET name = ?, email = ?, user_level = ?, default_pc_id = ? WHERE user_id = ?`;
     db.run(sql, [name, email, user_level, default_pc_id, req.params.id], function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません。" });
-        res.status(200).json({ message: "ユーザー情報を更新しました。" });
+        if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません" });
+        res.status(200).json({ message: "更新成功" });
     });
 });
-
 app.delete('/api/users/:id', (req, res) => {
-    db.run('DELETE FROM users WHERE user_id = ?', [req.params.id], function(err) {
+    db.run('DELETE FROM users WHERE user_id = ?', req.params.id, function(err) {
         if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません。" });
-        res.status(200).json({ message: "ユーザーを削除しました。" });
+        if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません" });
+        res.status(200).json({ message: "削除成功" });
     });
 });
-
 
 // --- PC (pcs) CRUD API ---
-
+app.get('/api/pcs', (req, res) => {
+    db.all("SELECT * FROM pcs ORDER BY pc_id", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
 app.post('/api/pcs', (req, res) => {
     const { pc_id, pc_name, notes } = req.body;
-    if (!pc_id || !pc_name) return res.status(400).json({ error: "PC IDとPC名は必須です。" });
-    db.run('INSERT INTO pcs (pc_id, pc_name, notes) VALUES (?, ?, ?)', [pc_id, pc_name, notes], function(err) {
-        if (err) return res.status(400).json({ error: "そのPC IDは既に使用されています。" });
-        res.status(201).json({ pc_id, pc_name });
+    if (!pc_id || !pc_name) return res.status(400).json({ error: "PC IDと名前は必須" });
+    db.run('INSERT INTO pcs (pc_id, pc_name, notes) VALUES (?, ?, ?)', [pc_id, pc_name, notes], (err) => {
+        if (err) return res.status(400).json({ error: "PC IDが重複" });
+        res.status(201).json({ pc_id });
     });
 });
 
@@ -366,17 +331,40 @@ app.post('/api/entry_logs', (req, res) => {
 
 
 // --- サーバー起動 ---
+app.get('/api/live/current-class', (req, res) => {
+    const now = new Date();
+    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    const dayOfWeek = jstNow.getUTCDay();
+    const currentTime = jstNow.getUTCHours().toString().padStart(2, '0') + ':' + jstNow.getUTCMinutes().toString().padStart(2, '0');
+    const todayDate = jstNow.toISOString().split('T')[0];
+    const findSlotSql = `SELECT * FROM class_slots WHERE day_of_week = ? AND start_time <= ? AND end_time > ? LIMIT 1`;
+    db.get(findSlotSql, [dayOfWeek, currentTime, currentTime], (err, slot) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!slot) return res.json({ message: "現在、授業時間外です。" });
+
+        const getAttendeesSql = `
+            SELECT s.user_id, u.name, s.status, p.pc_name,
+                   (SELECT log_time FROM entry_logs WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time) = ?) as entry_log_time
+            FROM schedules s JOIN users u ON s.user_id = u.user_id LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
+            WHERE s.class_date = ? AND s.slot_id = ? AND s.status != '欠席'`;
+        db.all(getAttendeesSql, [todayDate, todayDate, slot.slot_id], (err, attendees) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json({
+                current_class: slot,
+                attendees: attendees.map(a => ({...a, is_present: !!a.entry_log_time }))
+            });
+        });
+    });
+});
+
+
+// --- サーバー起動と終了処理 ---
 const server = app.listen(port, () => {
     console.log(`サーバーがポート${port}で起動しました。`);
 });
 process.on('SIGINT', () => {
     console.log("サーバーをシャットダウンします。");
-    server.close(() => {
-        db.close((err) => {
-            if (err) console.error("DBクローズエラー", err);
-            process.exit(0);
-        });
-    });
+    server.close(() => db.close(() => process.exit(0)));
 });
 /**
  * API: 生徒の通常スケジュールを一括登録
