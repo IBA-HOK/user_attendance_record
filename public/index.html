@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>総合管理システム</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* このページ専用のスタイル */
+        .portal-menu {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+            text-align: center;
+        }
+        .portal-card {
+            display: block;
+            padding: 30px 20px;
+            background-color: #f7f8fa;
+            border: 1px solid #dddfe2;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #1c1e21;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .portal-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            text-decoration: none;
+        }
+        .portal-card h2 {
+            margin-top: 0;
+            color: #1877f2;
+            border-bottom: none;
+            padding-bottom: 0;
+        }
+        .portal-card p {
+            font-size: 14px;
+            color: #606770;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>総合管理システム・ポータル</h1>
+    <p style="text-align: center;">全ての管理機能へ、ここからアクセスできる。</p>
+
+    <div class="portal-menu">
+
+        <a href="/live-dashboard.html" class="portal-card">
+            <h2>ライブ出席状況</h2>
+            <p>現在進行中の授業の出席状況をリアルタイムで確認する。</p>
+        </a>
+
+        <a href="/schedule-admin.html" class="portal-card">
+            <h2>全スケジュール管理</h2>
+            <p>全生徒のスケジュールを検索、編集、削除する。</p>
+        </a>
+
+        <a href="/schedule.html" class="portal-card">
+            <h2>振替登録</h2>
+            <p>生徒の授業の振替を登録する。</p>
+        </a>
+
+        <a href="/users.html" class="portal-card">
+            <h2>ユーザー管理</h2>
+            <p>生徒の登録、編集、削除、通常スケジュールの設定を行う。</p>
+        </a>
+
+        <a href="/class-slots.html" class="portal-card">
+            <h2>授業コマ管理</h2>
+            <p>授業のコマ（時間割）を登録、管理する。</p>
+        </a>
+
+        <a href="/pcs.html" class="portal-card">
+            <h2>PC管理</h2>
+            <p>塾のPC資産を登録、管理する。</p>
+        </a>
+
+        <a href="/bulk-schedule.html" class="portal-card">
+            <h2>通常授業の一括設定</h2>
+            <p>特定の生徒の通常授業を未来の日付まで一括で生成する。</p>
+        </a>
+
+    </div>
+</div>
+</body>
+</html>
