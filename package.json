@@ -2,9 +2,10 @@
   "name": "user-management-app",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
+"scripts": {
+  "test": "jest --testTimeout=30000 --detectOpenHandles",
+  "start": "node server.js"
+},
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -19,5 +20,9 @@
     "multer": "^2.0.1",
     "sqlite3": "^5.1.7",
     "unzipper": "^0.12.3"
+  },
+  "devDependencies": {
+    "jest": "^30.0.4",
+    "supertest": "^7.1.3"
   }
 }
