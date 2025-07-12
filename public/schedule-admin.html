@@ -51,18 +51,29 @@
         </div>
     </div>
     
+    
     <div id="add-schedule-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
             <h2>新規授業予定の追加</h2>
             <form id="add-schedule-form">
-                <div class="form-group"><label for="add-user-select">生徒:</label><select id="add-user-select" required></select></div>
+                <div class="form-group">
+                    <label>生徒を検索:</label>
+                    <div class="student-search">
+                        <input type="text" id="student-search-input" placeholder="生徒名で検索">
+                        <button type="button" id="student-search-btn">検索</button>
+                    </div>
+                    <div id="student-search-results"></div>
+                    <p id="selected-student-info" style="font-weight: bold;"></p>
+                </div>
+                <hr>
                 <div class="form-group"><label for="add-class-date">日付:</label><input type="date" id="add-class-date" required></div>
                 <div class="form-group"><label for="add-slot-select">コマ:</label><select id="add-slot-select" required></select></div>
                 <div class="form-group"><label for="add-status-select">ステータス:</label><select id="add-status-select" required><option value="通常">通常</option><option value="振替">振替</option></select></div>
                 <div class="form-group"><label for="add-notes">備考:</label><textarea id="add-notes" rows="3"></textarea></div>
-                <button type="submit">追加</button>
+                <button type="submit">この内容で追加</button>
             </form>
+            <p id="add-message" class="message"></p>
         </div>
     </div>
 <div id="edit-schedule-modal" class="modal">
@@ -91,12 +102,15 @@
                 <label for="edit-pc-select">割当PC:</label>
                 <select id="edit-pc-select"></select>
             </div>
+            <div class="form-group">
+                <label for="edit-notes">備考:</label>
+                <textarea id="edit-notes" rows="3"></textarea>
+            </div>
             <button type="submit">保存</button>
         </form>
         <p id="edit-message" class="message"></p>
     </div>
 </div>
-
 <script src="schedule-admin.js"></script>
 </body>
 </html>
