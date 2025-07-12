@@ -789,6 +789,7 @@ module.exports = { createApp }; // 関数をエクスポート
 if (require.main === module) {
     const port = 3000;
     // 本番用のDBでアプリを生成
+
     const db = new sqlite3.Database('./management.db');
     const app = createApp(db);
 
