@@ -18,6 +18,8 @@ const port = 3000;
 
 // --- データベース設定 ---
 const db = new sqlite3.Database('./management.db');
+function createApp(db) {
+    const app = express();
 // (テーブル作成処理は変更なし)
 db.serialize(() => {
     db.run("PRAGMA foreign_keys = ON;");
@@ -77,23 +79,28 @@ app.post('/api/logout', (req, res) => {
     });
 });
 
-// まず、全てのアクセスに対する検問所を設置する
-app.use((req, res, next) => {
-    // ログインページ自体や、そのページの動作に必要なファイルは、チェックせず通す
-    // (このリストにあるパスは、ログインしていなくてもアクセスできる)
-    const publicPaths = ['/login.html', '/login.js', '/styles.css'];
-    if (publicPaths.includes(req.path)) {
-        return next();
-    }
+    app.use((req, res, next) => {
+        // ログインページ自体や、そのページの動作に必要なファイルは、チェックせず通す
+        const publicPaths = ['/login.html', '/login.js', '/styles.css'];
+        if (publicPaths.includes(req.path)) {
+            return next();
+        }
 
-    // それ以外の全てのアクセスに対して、セッション（許可証）を確認する
-    if (req.session.user) {
-        return next(); // 許可証あり、通れ
-    }
+        // セッション（許可証）があれば、通す
+        if (req.session.user) {
+            return next();
+        }
 
-    // 許可証なし、ログインページへ送り返す
-    res.redirect('/login.html');
-});
+        // 許可証がなく、かつAPIへのリクエストだった場合
+        // 「認証が必要だ」というJSONを返し、処理を中断する
+        if (req.path.startsWith('/api/')) {
+            return res.status(401).json({ error: '認証が必要です。' });
+        }
+
+        // 許可証がなく、API以外へのリクエストだった場合（人間からのアクセスと判断）
+        // ログインページへ送り返す
+        res.redirect('/login.html');
+    });
 
 // 検問所を抜けた者だけが、この先のファイルにアクセスできる
 app.use(express.static(path.join(__dirname, 'public')));
@@ -332,76 +339,93 @@ app.get('/api/export', (req, res) => {
  * API: 全データのインポート (ZIP形式のCSVファイルから)
  * POST /api/import
  */
-app.post('/api/import', upload.single('backupFile'), (req, res) => {
-    if (!req.file) {
-        return res.status(400).json({ error: 'バックアップファイルがアップロードされていません。' });
-    }
+    app.post('/api/import', upload.single('backupFile'), async (req, res) => {
+        if (!req.file) {
+            return res.status(400).json({ error: 'バックアップファイルがアップロードされていません。' });
+        }
 
-    const filePath = req.file.path;
-    const importData = {};
-    const tablesInOrder = ['admins', 'pcs', 'users', 'class_slots', 'schedules', 'entry_logs'];
-
-    fs.createReadStream(filePath)
-        .pipe(unzipper.Parse())
-        .on('entry', function (entry) {
-            const tableName = entry.path.replace('.csv', '');
-            if (tablesInOrder.includes(tableName)) {
-                importData[tableName] = [];
-                entry.pipe(csv()).on('data', (data) => importData[tableName].push(data));
-            } else {
-                entry.autodrain();
-            }
-        })
-        .on('finish', () => {
-            db.serialize(() => {
-                let transactionError = null;
-
-                db.run("BEGIN TRANSACTION");
-
-                // 既存データを全て削除
-                ['entry_logs', 'schedules', 'users', 'class_slots', 'pcs', 'admins'].forEach(table => {
-                    db.run(`DELETE FROM ${table}`, (err) => { if(err) transactionError = err; });
-                });
-                db.run("DELETE FROM sqlite_sequence", (err) => { /* このエラーは無視してよい */ });
-                
-                // 新しいデータを挿入
-                tablesInOrder.forEach(table => {
-                    if (transactionError) return;
-                    const records = importData[table];
-                    if (records && records.length > 0) {
-                        const keys = Object.keys(records[0]);
-                        const placeholders = keys.map(() => '?').join(',');
-                        const sql = `INSERT INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`;
-                        const stmt = db.prepare(sql, (err) => { if(err) transactionError = err; });
-                        
-                        records.forEach(record => {
-                            const values = keys.map(key => record[key] === '' ? null : record[key]);
-                            stmt.run(values, (err) => { if(err) transactionError = err; });
-                        });
-                        
-                        // ▼▼▼ このfinalizeにコールバックを追加するのが重要 ▼▼▼
-                        stmt.finalize((err) => { if(err) transactionError = err; });
-                    }
-                });
-
-                // トランザクションを完了
-                db.run(transactionError ? "ROLLBACK" : "COMMIT", (err) => {
-                    fs.unlinkSync(filePath); // 一時ファイルを削除
-                    if (transactionError) {
-                        return res.status(400).json({ error: `インポート失敗: ${transactionError.message}` });
-                    }
-                    if (err) {
-                        return res.status(500).json({ error: "トランザクションのコミットに失敗しました。" });
-                    }
-                    res.json({ message: "データのインポートが正常に完了しました。" });
-                });
+        const filePath = req.file.path;
+        const tablesInOrder = ['admins', 'pcs', 'users', 'class_slots', 'schedules', 'entry_logs'];
+        
+        const run = (sql, params = []) => new Promise((resolve, reject) => {
+            db.run(sql, params, function(err) {
+                if (err) return reject(err);
+                resolve(this);
             });
-        })
-        .on('error', (err) => {
-             fs.unlinkSync(filePath);
-             res.status(500).json({ error: `ZIPファイルの展開中にエラーが発生しました: ${err.message}` });
         });
-});
+
+        try {
+            const importData = {};
+            await new Promise((resolve, reject) => {
+                fs.createReadStream(filePath)
+                    .pipe(unzipper.Parse())
+                    .on('entry', function (entry) {
+                        const tableName = entry.path.replace('.csv', '');
+                        if (tablesInOrder.includes(tableName)) {
+                            importData[tableName] = [];
+                            entry.pipe(csv()).on('data', (data) => importData[tableName].push(data));
+                        } else {
+                            entry.autodrain();
+                        }
+                    })
+                    .on('finish', resolve)
+                    .on('error', reject);
+            });
+
+            await run("BEGIN TRANSACTION");
+            
+            for (const table of [...tablesInOrder].reverse()) {
+                await run(`DELETE FROM ${table}`);
+            }
+
+            // ▼▼▼ ここが改修ポイント ▼▼▼
+            // sqlite_sequence テーブルが存在しない場合のエラーを握りつぶす
+            try {
+                await run("DELETE FROM sqlite_sequence");
+            } catch (e) {
+                // 「no such table」エラーは、テーブルがまだ存在しない正常なケースなので無視する
+                if (!e.message.includes('no such table: sqlite_sequence')) {
+                    throw e; // それ以外の予期せぬエラーは再スローしてトランザクションを失敗させる
+                }
+            }
+            // ▲▲▲ 改修ポイントここまで ▲▲▲
+
+            for (const table of tablesInOrder) {
+                const records = importData[table];
+                if (records && records.length > 0) {
+                    const keys = Object.keys(records[0]);
+                    const placeholders = keys.map(() => '?').join(',');
+                    const sql = `INSERT INTO ${table} (${keys.join(',')}) VALUES (${placeholders})`;
+                    
+                    const stmt = db.prepare(sql);
+                    for (const record of records) {
+                        const values = keys.map(key => (record[key] === '' || record[key] === null || record[key] === undefined) ? null : record[key]);
+                        await new Promise((resolve, reject) => {
+                            stmt.run(values, err => {
+                                if (err) return reject(err);
+                                resolve();
+                            });
+                        });
+                    }
+                    await new Promise((resolve, reject) => {
+                        stmt.finalize(err => {
+                            if (err) return reject(err);
+                            resolve();
+                        });
+                    });
+                }
+            }
+
+            await run("COMMIT");
+            res.json({ message: "データのインポートが正常に完了しました。" });
+
+        } catch (error) {
+            await run("ROLLBACK").catch(rbError => console.error("Rollback failed:", rbError));
+            res.status(500).json({ error: `インポート失敗: ${error.message}` });
+        } finally {
+            fs.unlinkSync(filePath);
+        }
+    });
 // --- スケジュール (schedules) API ---
 
 // 【強化版】スケジュールを取得（日付範囲、ステータスでの絞り込みに対応）
@@ -757,12 +781,24 @@ app.post('/api/schedules/bulk', (req, res) => {
     });
 });
 
+    return app;
+}
+
+module.exports = { createApp }; // 関数をエクスポート
 // --- サーバー起動と終了処理 ---
-const server = app.listen(port, () => {
-    console.log(`サーバーがポート${port}で起動しました。`);
-});
-process.on('SIGINT', () => {
-    console.log("サーバーをシャットダウンします。");
-    server.close(() => db.close(() => process.exit(0)));
-});
+if (require.main === module) {
+    const port = 3000;
+    // 本番用のDBでアプリを生成
+    const db = new sqlite3.Database('./management.db');
+    const app = createApp(db);
+
+    const server = app.listen(port, () => {
+        console.log(`サーバーがポート${port}で起動しました。`);
+    });
+
+    process.on('SIGINT', () => {
+        console.log("サーバーをシャットダウンします。");
+        server.close(() => db.close(() => process.exit(0)));
+    });
+}
 
