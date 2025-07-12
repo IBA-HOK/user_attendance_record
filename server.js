@@ -536,31 +536,164 @@ app.post('/api/entry_logs', (req, res) => {
         res.status(201).json({ message: "ログを記録しました。" });
     });
 });
+/**
+ * API: ライブダッシュボードから生徒を「欠席」にする
+ * POST /api/live/make-absent
+ */
+app.post('/api/live/make-absent', (req, res) => {
+    const { user_id } = req.body;
+    if (!user_id) {
+        return res.status(400).json({ error: "user_idが指定されていません。" });
+    }
 
+    // 現在のコマ情報を特定する
+    const now = new Date();
+    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    const dayOfWeek = jstNow.getUTCDay();
+    const currentTime = jstNow.getUTCHours().toString().padStart(2, '0') + ':' + jstNow.getUTCMinutes().toString().padStart(2, '0');
+    const todayDate = jstNow.toISOString().split('T')[0];
 
+    const findSlotSql = `SELECT * FROM class_slots WHERE day_of_week = ? AND start_time <= ? AND end_time > ? ORDER BY start_time DESC LIMIT 1`;
+    db.get(findSlotSql, [dayOfWeek, currentTime, currentTime], (err, slot) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!slot) return res.status(404).json({ error: "現在、授業時間外です。" });
+
+        // 対象のスケジュールを特定してステータスを更新
+        const updateSql = `
+            UPDATE schedules 
+            SET status = '欠席' 
+            WHERE user_id = ? AND class_date = ? AND slot_id = ? AND status != '欠席'
+        `;
+        db.run(updateSql, [user_id, todayDate, slot.slot_id], function(err) {
+            if (err) {
+                return res.status(500).json({ error: err.message });
+            }
+            if (this.changes === 0) {
+                return res.status(404).json({ error: "対象のスケジュールが見つからないか、既に欠席としてマークされています。" });
+            }
+            res.status(200).json({ message: "ステータスを「欠席」に更新しました。" });
+        });
+    });
+});
+/**
+ * API: 今日の入室ログを削除する（出席取り消し用）
+ * DELETE /api/entry_logs/today
+ */
+app.delete('/api/entry_logs/today', (req, res) => {
+    const { user_id } = req.body;
+    if (!user_id) {
+        return res.status(400).json({ error: "user_idが指定されていません。" });
+    }
+
+    // JSTでの今日の日付を取得
+    const now = new Date();
+    const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
+    const todayDate = jstNow.toISOString().split('T')[0];
+
+    const sql = `
+        DELETE FROM entry_logs 
+        WHERE user_id = ? AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
+    `;
+
+    db.run(sql, [user_id, todayDate], function(err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        if (this.changes === 0) {
+            return res.status(404).json({ error: "削除対象の出席記録が見つかりません。" });
+        }
+        res.status(200).json({ message: "出席記録を取り消しました。" });
+    });
+});
 app.get('/api/live/current-class', (req, res) => {
     const now = new Date();
     const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
     const dayOfWeek = jstNow.getUTCDay();
     const currentTime = jstNow.getUTCHours().toString().padStart(2, '0') + ':' + jstNow.getUTCMinutes().toString().padStart(2, '0');
     const todayDate = jstNow.toISOString().split('T')[0];
-    const findSlotSql = `SELECT * FROM class_slots WHERE day_of_week = ? AND start_time <= ? AND end_time > ? LIMIT 1`;
+
+    const findSlotSql = `SELECT * FROM class_slots WHERE day_of_week = ? AND start_time <= ? AND end_time > ? ORDER BY start_time DESC LIMIT 1`;
     db.get(findSlotSql, [dayOfWeek, currentTime, currentTime], (err, slot) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!slot) return res.json({ message: "現在、授業時間外です。" });
 
+        // ▼▼▼ s.notes と u.user_level をSELECT句に追加 ▼▼▼
         const getAttendeesSql = `
-            SELECT s.user_id, u.name, s.status, p.pc_name,
-                   (SELECT log_time FROM entry_logs WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time) = ?) as entry_log_time
-            FROM schedules s JOIN users u ON s.user_id = u.user_id LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
-            WHERE s.class_date = ? AND s.slot_id = ? AND s.status != '欠席'`;
+            SELECT
+                s.user_id, s.notes,
+                u.name, u.user_level,
+                p.pc_name,
+                (SELECT log_time FROM entry_logs 
+                 WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
+                 ORDER BY log_time DESC LIMIT 1) as entry_log_time
+            FROM schedules s
+            JOIN users u ON s.user_id = u.user_id
+            LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
+            WHERE s.class_date = ? AND s.slot_id = ? AND s.status != '欠席'
+            ORDER BY u.name
+        `;
         db.all(getAttendeesSql, [todayDate, todayDate, slot.slot_id], (err, attendees) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json({
                 current_class: slot,
-                attendees: attendees.map(a => ({...a, is_present: !!a.entry_log_time }))
+                attendees: attendees.map(a => ({ ...a, is_present: !!a.entry_log_time }))
             });
         });
+    });
+});
+/**
+ * API: 指定した日に出席記録のない出席予定者を取得
+ * GET /api/unaccounted
+ */
+app.get('/api/unaccounted', (req, res) => {
+    const { date } = req.query;
+    if (!date) {
+        return res.status(400).json({ error: "日付が指定されていません。" });
+    }
+
+    const sql = `
+        SELECT 
+            s.schedule_id, s.class_date, s.status,
+            u.user_id, u.name AS user_name,
+            c.slot_name
+        FROM schedules s
+        JOIN users u ON s.user_id = u.user_id
+        JOIN class_slots c ON s.slot_id = c.slot_id
+        WHERE
+            s.class_date = ?
+            AND s.status != '欠席'
+            AND NOT EXISTS (
+                SELECT 1 FROM entry_logs el 
+                WHERE el.user_id = s.user_id 
+                AND date(el.log_time, '+9 hours') = s.class_date
+                AND el.log_type = 'entry'
+            )
+        ORDER BY c.start_time, u.name
+    `;
+
+    db.all(sql, [date], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(rows);
+    });
+});
+
+
+/**
+ * API: 入退室ログを一件記録
+ */
+app.post('/api/entry_logs', (req, res) => {
+    const { user_id, log_type } = req.body;
+    if (!user_id || !log_type) return res.status(400).json({ error: "user_idとlog_typeは必須です。" });
+    // JSTでの現在時刻を記録
+    const log_time = new Date().toISOString();
+    
+    // 退室記録の場合は、同じ日の入室記録を消す、などのロジックも追加可能
+    // 今回はシンプルにログを追加するだけ
+    db.run('INSERT INTO entry_logs (user_id, log_time, log_type) VALUES (?, ?, ?)', [user_id, log_time, log_type], function(err) {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(201).json({ message: "ログを記録しました。" });
     });
 });
 /**
