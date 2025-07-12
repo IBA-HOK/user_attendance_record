@@ -1,25 +1,29 @@
+// public/schedule-admin.js (完全修正版)
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM要素の取得 ---
     const filterForm = document.getElementById('filter-form');
     const scheduleListBody = document.getElementById('schedule-list-body');
-
-    // 編集モーダル用の要素
-    const editModal = document.getElementById('edit-schedule-modal');
-    const editForm = document.getElementById('edit-schedule-form');
-    const closeModalBtn = editModal.querySelector('.close-btn');
-    const editMessage = document.getElementById('edit-message');
-
     const addScheduleBtn = document.getElementById('add-schedule-btn');
+
+    // 新規追加モーダル
     const addModal = document.getElementById('add-schedule-modal');
+    const addForm = document.getElementById('add-schedule-form');
+    const closeAddModalBtn = addModal.querySelector('.close-btn');
     const searchInput = document.getElementById('student-search-input');
     const searchBtn = document.getElementById('student-search-btn');
     const searchResults = document.getElementById('student-search-results');
-    const addForm = document.getElementById('add-schedule-form');
-    const closeAddModalBtn = addModal.querySelector('.close-btn');
-    let currentEditingScheduleId = null;
-    let selectedStudent
+    const selectedStudentInfo = document.getElementById('selected-student-info');
+    const addClassDateInput = document.getElementById('add-class-date');
+    const addSlotSelect = document.getElementById('add-slot-select');
+    let selectedUserForAdd = null; 
 
-    // --- 関数定義 ---
+    // 編集モーダル
+    const editModal = document.getElementById('edit-schedule-modal');
+    const editForm = document.getElementById('edit-schedule-form');
+    const closeModalBtn = editModal.querySelector('.close-btn');
+    let currentEditingScheduleId = null;
+
+
     const searchStudents = async () => {
         const query = searchInput.value.trim();
         if (!query) return;
@@ -27,6 +31,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`/api/users?name=${query}`);
             const data = await response.json();
             searchResults.innerHTML = '';
+            selectedStudentInfo.textContent = '';
+            selectedUserForAdd = null;
             if (data.users && data.users.length > 0) {
                 data.users.forEach(user => {
                     const div = document.createElement('div');
@@ -34,15 +40,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     div.textContent = `${user.name} (ID: ${user.user_id})`;
                     div.dataset.userId = user.user_id;
                     div.dataset.userName = user.name;
+                    // ▼▼▼ データ属性にデフォルトPCのIDも埋め込む ▼▼▼
+                    div.dataset.defaultPcId = user.default_pc_id || '';
                     searchResults.appendChild(div);
                 });
             } else {
                 searchResults.textContent = '該当する生徒が見つかりません。';
             }
-        } catch (error) {
-            console.error("生徒検索エラー:", error);
-        }
+        } catch (error) { console.error("生徒検索エラー:", error); }
     };
+
     // セレクトボックスをデータで満たす汎用関数
     const populateSelect = async (url, selectElement, valueField, textFieldFn, defaultText) => {
         try {
@@ -102,25 +109,81 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error("スケジュール取得エラー:", error);
         }
     };
+   const updateAddModalSlots = async () => {
+        const selectedDate = addClassDateInput.value;
+        addSlotSelect.innerHTML = '<option value="">日付を選択してください</option>';
+        if (!selectedDate) return;
+
+        const date = new Date(selectedDate + 'T00:00:00');
+        const dayOfWeek = date.getDay();
+
+        try {
+            const response = await fetch(`/api/class_slots?dayOfWeek=${dayOfWeek}`);
+            const slots = await response.json();
+            
+            addSlotSelect.innerHTML = '<option value="">コマを選択...</option>';
+            if (slots.length > 0) {
+                slots.forEach(slot => {
+                    const option = document.createElement('option');
+                    option.value = slot.slot_id;
+                    option.textContent = slot.slot_name;
+                    addSlotSelect.appendChild(option);
+                });
+            } else {
+                addSlotSelect.innerHTML = '<option value="">この曜日のコマはありません</option>';
+            }
+        } catch (error) {
+            console.error("新規追加用コマの取得エラー:", error);
+        }
+    };
 
     // --- イベントリスナー設定 ---
     addScheduleBtn.addEventListener('click', () => {
         addForm.reset();
+        searchResults.innerHTML = '';
+        selectedStudentInfo.textContent = '';
+        selectedUserIdForAdd = null;
+        document.getElementById('add-message').textContent = '';
+        updateAddModalSlots();
         addModal.style.display = 'block';
     });
+    addClassDateInput.addEventListener('change', updateAddModalSlots);
+    // モーダル内の検索ボタン
     searchBtn.addEventListener('click', searchStudents);
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchStudents();
+    searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchStudents(); } });
+
+    // 検索結果から生徒を選択
+    searchResults.addEventListener('click', (e) => {
+        if (e.target.classList.contains('search-result-item')) {
+            // タイプミスを修正: `electedUserForAdd` -> `selectedUserForAdd`
+            selectedUserForAdd = {
+                id: e.target.dataset.userId,
+                name: e.target.dataset.userName,
+                pcId: e.target.dataset.defaultPcId
+            };
+            selectedStudentInfo.textContent = `選択中の生徒: ${e.target.textContent}`;
+            searchResults.innerHTML = '';
+        }
     });
-        // 新規追加フォームの送信
+    // 新規追加フォームの送信
     addForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const messageArea = document.getElementById('add-message');
+        messageArea.textContent = '';
+        
+        if (!selectedUserForAdd) {
+            alert('生徒を選択してください。');
+            return;
+        }
+
         const formData = {
-            user_id: selectedStudent.id,
+            user_id: selectedUserForAdd.id,
             class_date: document.getElementById('add-class-date').value,
             slot_id: document.getElementById('add-slot-select').value,
             status: document.getElementById('add-status-select').value,
             notes: document.getElementById('add-notes').value,
+            // ▼▼▼ 記憶しておいたPCのIDを自動で設定 ▼▼▼
+            assigned_pc_id: selectedUserForAdd.pcId || null
         };
         try {
             const response = await fetch('/api/schedules', {
@@ -131,7 +194,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!response.ok) throw new Error((await response.json()).error);
             addModal.style.display = 'none';
             fetchSchedules();
-        } catch (error) { alert(`追加失敗: ${error.message}`); }
+        } catch (error) {
+            messageArea.textContent = `追加失敗: ${error.message}`;
+            messageArea.classList.add('error');
+        }
     });
     // 絞り込みフォームの送信
     filterForm.addEventListener('submit', (e) => {
@@ -172,15 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
             editModal.style.display = 'block';
         }
     });
-    searchResults.addEventListener('click', (e) => {
-        if (e.target.classList.contains('search-result-item')) {
-            selectedStudent = {
-                id: e.target.dataset.userId,
-                name: e.target.dataset.userName,
-            };
-            searchResults.innerHTML = ''; // 検索結果をクリア
-        }
-    });
+
     // 編集モーダルのフォーム送信
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -216,9 +274,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- 初期化処理 ---
     const initialize = async () => {        
         await Promise.all([
-            // populateSelect('/api/users', document.getElementById('add-user-select'),  'user_id', 'name', 'users'),
-            populateSelect('/api/class_slots', document.getElementById('edit-slot-select'), 'slot_id', 'slot_name', 'コマ'),
-            populateSelect('/api/pcs', document.getElementById('edit-pc-select'), 'pc_id', (item) => `${item.pc_id} (${item.pc_name})`, 'PC')
+            // populateSelect('/api/class_slots', document.getElementById('add-slot-select'), 'slot_id', 'slot_name', 'コマを選択'),
+            populateSelect('/api/class_slots', document.getElementById('edit-slot-select'), 'slot_id', 'slot_name', 'コマを選択'),
+            populateSelect('/api/pcs', document.getElementById('edit-pc-select'), 'pc_id', (item) => `${item.pc_id} (${item.pc_name})`, 'PCを選択')
         ]);
         fetchSchedules();
     };

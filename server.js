@@ -410,7 +410,7 @@ app.get('/api/schedules', (req, res) => {
     const { date, startDate, endDate, status, userId, name } = req.query;
     
     let sql = `
-        SELECT s.schedule_id, s.class_date, s.status,
+        SELECT s.schedule_id, s.class_date, s.status, s.notes, 
                u.user_id, u.name as user_name,
                c.slot_id, c.slot_name,
                p.pc_id as assigned_pc_id, p.pc_name
