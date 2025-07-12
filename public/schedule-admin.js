@@ -1,4 +1,3 @@
-// public/schedule-admin.js (完全修正版)
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM要素の取得 ---
     const filterForm = document.getElementById('filter-form');
@@ -15,15 +14,117 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedStudentInfo = document.getElementById('selected-student-info');
     const addClassDateInput = document.getElementById('add-class-date');
     const addSlotSelect = document.getElementById('add-slot-select');
-    let selectedUserForAdd = null; 
+    let selectedUserForAdd = null;
 
     // 編集モーダル
     const editModal = document.getElementById('edit-schedule-modal');
     const editForm = document.getElementById('edit-schedule-form');
     const closeModalBtn = editModal.querySelector('.close-btn');
+    const editMessage = document.getElementById('edit-message');
+    const editClassDateInput = document.getElementById('edit-class-date');
+    const editSlotSelect = document.getElementById('edit-slot-select');
     let currentEditingScheduleId = null;
 
+    // --- 関数定義 ---
+    const populateSelect = async (url, selectElement, valueField, textFieldFn, defaultText) => {
+        try {
+            const response = await fetch(url);
+            const items = await response.json();
+            selectElement.innerHTML = `<option value="">-- ${defaultText} --</option>`;
+            if (Array.isArray(items)) {
+                items.forEach(item => {
+                    const option = document.createElement('option');
+                    option.value = item[valueField];
+                    option.textContent = typeof textFieldFn === 'function' ? textFieldFn(item) : item[textFieldFn];
+                    selectElement.appendChild(option);
+                });
+            }
+        } catch (error) { console.error(`${defaultText}の取得に失敗:`, error); }
+    };
 
+    const fetchSchedules = async () => {
+        const startDate = document.getElementById('start-date').value;
+        const endDate = document.getElementById('end-date').value;
+        const status = document.getElementById('status-filter').value;
+        const name = document.getElementById('name-filter').value.trim();
+        const params = new URLSearchParams();
+        if (startDate) params.append('startDate', startDate);
+        if (endDate) params.append('endDate', endDate);
+        if (status) params.append('status', status);
+        if (name) params.append('name', name);
+        try {
+            const response = await fetch(`/api/schedules?${params.toString()}`);
+            const schedules = await response.json();
+            scheduleListBody.innerHTML = '';
+            schedules.forEach(s => {
+                const tr = document.createElement('tr');
+                tr.dataset.schedule = JSON.stringify(s);
+                tr.innerHTML = `
+                    <td>${s.class_date}</td>
+                    <td>${s.slot_name}</td>
+                    <td>${s.user_name}</td>
+                    <td><span class="status-${s.status.toLowerCase()}">${s.status}</span></td>
+                    <td>${s.notes || ''}</td>
+                    <td>${s.pc_name || 'N/A'}</td>
+                    <td class="actions">
+                        <button class="edit-btn">編集</button>
+                        <button class="delete-btn">削除</button>
+                    </td>
+                `;
+                scheduleListBody.appendChild(tr);
+            });
+        } catch (error) { console.error("スケジュール取得エラー:", error); }
+    };
+
+    const updateAddModalSlots = async () => {
+        const selectedDate = addClassDateInput.value;
+        addSlotSelect.innerHTML = '<option value="">日付を選択してください</option>';
+        if (!selectedDate) return;
+        const date = new Date(selectedDate + 'T00:00:00');
+        const dayOfWeek = date.getDay();
+        try {
+            const response = await fetch(`/api/class_slots?dayOfWeek=${dayOfWeek}`);
+            const slots = await response.json();
+            addSlotSelect.innerHTML = '<option value="">コマを選択...</option>';
+            if (slots.length > 0) {
+                slots.forEach(slot => {
+                    const option = document.createElement('option');
+                    option.value = slot.slot_id;
+                    option.textContent = slot.slot_name;
+                    addSlotSelect.appendChild(option);
+                });
+            } else {
+                addSlotSelect.innerHTML = '<option value="">この曜日のコマはありません</option>';
+            }
+        } catch (error) { console.error("新規追加用コマの取得エラー:", error); }
+    };
+    const updateEditModalSlots = async () => {
+        const selectedDate = editClassDateInput.value;
+        editSlotSelect.innerHTML = '<option value="">日付を選択してください</option>';
+        if (!selectedDate) return;
+
+        const date = new Date(selectedDate + 'T00:00:00');
+        const dayOfWeek = date.getDay();
+
+        try {
+            const response = await fetch(`/api/class_slots?dayOfWeek=${dayOfWeek}`);
+            const slots = await response.json();
+            
+            editSlotSelect.innerHTML = '<option value="">コマを選択...</option>';
+            if (slots.length > 0) {
+                slots.forEach(slot => {
+                    const option = document.createElement('option');
+                    option.value = slot.slot_id;
+                    option.textContent = slot.slot_name;
+                    editSlotSelect.appendChild(option);
+                });
+            } else {
+                editSlotSelect.innerHTML = '<option value="">この曜日のコマはありません</option>';
+            }
+        } catch (error) {
+            console.error("編集用コマの取得エラー:", error);
+        }
+    };
     const searchStudents = async () => {
         const query = searchInput.value.trim();
         if (!query) return;
@@ -40,7 +141,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     div.textContent = `${user.name} (ID: ${user.user_id})`;
                     div.dataset.userId = user.user_id;
                     div.dataset.userName = user.name;
-                    // ▼▼▼ データ属性にデフォルトPCのIDも埋め込む ▼▼▼
                     div.dataset.defaultPcId = user.default_pc_id || '';
                     searchResults.appendChild(div);
                 });
@@ -50,112 +150,23 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { console.error("生徒検索エラー:", error); }
     };
 
-    // セレクトボックスをデータで満たす汎用関数
-    const populateSelect = async (url, selectElement, valueField, textFieldFn, defaultText) => {
-        try {
-            const response = await fetch(url);
-            const items = await response.json();
-            selectElement.innerHTML = `<option value="">-- ${defaultText} --</option>`;
-            if (Array.isArray(items)) {
-                items.forEach(item => {
-                    const option = document.createElement('option');
-                    option.value = item[valueField];
-                    option.textContent = typeof textFieldFn === 'function' ? textFieldFn(item) : item[textFieldFn];
-                    selectElement.appendChild(option);
-                });
-            }
-        } catch (error) {
-            console.error(`${defaultText}の取得に失敗:`, error);
-        }
-    };
-
-    // スケジュールを取得して表示するメイン関数
-    const fetchSchedules = async () => {
-        const startDate = document.getElementById('start-date').value;
-        const endDate = document.getElementById('end-date').value;
-        const status = document.getElementById('status-filter').value;
-        // ▼▼▼ この行を追記 ▼▼▼
-        const name = document.getElementById('name-filter').value.trim();
-
-        const params = new URLSearchParams();
-        if (startDate) params.append('startDate', startDate);
-        if (endDate) params.append('endDate', endDate);
-        if (status) params.append('status', status);
-        if (name) params.append('name', name);
-
-        try {
-            const response = await fetch(`/api/schedules?${params.toString()}`);
-            const schedules = await response.json();
-
-            scheduleListBody.innerHTML = ''; // 以下、変更なし
-            schedules.forEach(s => {
-                const tr = document.createElement('tr');
-                tr.dataset.schedule = JSON.stringify(s);
-                tr.innerHTML = `
-           <td>${s.class_date}</td>
-            <td>${s.slot_name}</td>
-            <td>${s.user_name}</td>
-            <td><span class="status-${s.status.toLowerCase()}">${s.status}</span></td>
-            <td>${s.notes || ''}</td>
-                <td>${s.pc_name || 'N/A'}</td>
-                <td class="actions">
-                    <button class="edit-btn">編集</button>
-                    <button class="delete-btn">削除</button>
-                </td>
-            `;
-                scheduleListBody.appendChild(tr);
-            });
-        } catch (error) {
-            console.error("スケジュール取得エラー:", error);
-        }
-    };
-   const updateAddModalSlots = async () => {
-        const selectedDate = addClassDateInput.value;
-        addSlotSelect.innerHTML = '<option value="">日付を選択してください</option>';
-        if (!selectedDate) return;
-
-        const date = new Date(selectedDate + 'T00:00:00');
-        const dayOfWeek = date.getDay();
-
-        try {
-            const response = await fetch(`/api/class_slots?dayOfWeek=${dayOfWeek}`);
-            const slots = await response.json();
-            
-            addSlotSelect.innerHTML = '<option value="">コマを選択...</option>';
-            if (slots.length > 0) {
-                slots.forEach(slot => {
-                    const option = document.createElement('option');
-                    option.value = slot.slot_id;
-                    option.textContent = slot.slot_name;
-                    addSlotSelect.appendChild(option);
-                });
-            } else {
-                addSlotSelect.innerHTML = '<option value="">この曜日のコマはありません</option>';
-            }
-        } catch (error) {
-            console.error("新規追加用コマの取得エラー:", error);
-        }
-    };
-
     // --- イベントリスナー設定 ---
     addScheduleBtn.addEventListener('click', () => {
         addForm.reset();
         searchResults.innerHTML = '';
         selectedStudentInfo.textContent = '';
-        selectedUserIdForAdd = null;
+        selectedUserForAdd = null;
         document.getElementById('add-message').textContent = '';
         updateAddModalSlots();
         addModal.style.display = 'block';
     });
+
     addClassDateInput.addEventListener('change', updateAddModalSlots);
-    // モーダル内の検索ボタン
     searchBtn.addEventListener('click', searchStudents);
     searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchStudents(); } });
 
-    // 検索結果から生徒を選択
     searchResults.addEventListener('click', (e) => {
         if (e.target.classList.contains('search-result-item')) {
-            // タイプミスを修正: `electedUserForAdd` -> `selectedUserForAdd`
             selectedUserForAdd = {
                 id: e.target.dataset.userId,
                 name: e.target.dataset.userName,
@@ -165,32 +176,22 @@ document.addEventListener('DOMContentLoaded', () => {
             searchResults.innerHTML = '';
         }
     });
-    // 新規追加フォームの送信
+
     addForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const messageArea = document.getElementById('add-message');
         messageArea.textContent = '';
-        
-        if (!selectedUserForAdd) {
-            alert('生徒を選択してください。');
-            return;
-        }
-
+        if (!selectedUserForAdd) { alert('生徒を選択してください。'); return; }
         const formData = {
             user_id: selectedUserForAdd.id,
             class_date: document.getElementById('add-class-date').value,
             slot_id: document.getElementById('add-slot-select').value,
             status: document.getElementById('add-status-select').value,
             notes: document.getElementById('add-notes').value,
-            // ▼▼▼ 記憶しておいたPCのIDを自動で設定 ▼▼▼
             assigned_pc_id: selectedUserForAdd.pcId || null
         };
         try {
-            const response = await fetch('/api/schedules', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
+            const response = await fetch('/api/schedules', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData) });
             if (!response.ok) throw new Error((await response.json()).error);
             addModal.style.display = 'none';
             fetchSchedules();
@@ -199,22 +200,19 @@ document.addEventListener('DOMContentLoaded', () => {
             messageArea.classList.add('error');
         }
     });
-    // 絞り込みフォームの送信
+
     filterForm.addEventListener('submit', (e) => {
         e.preventDefault();
         fetchSchedules();
     });
 
-    // 一覧テーブル内のボタンクリック（イベント委任）
     scheduleListBody.addEventListener('click', async (e) => {
         const target = e.target;
         const tr = target.closest('tr');
         if (!tr) return;
-
         const scheduleData = JSON.parse(tr.dataset.schedule);
         currentEditingScheduleId = scheduleData.schedule_id;
 
-        // 削除ボタンの処理
         if (target.classList.contains('delete-btn')) {
             if (confirm(`ID:${scheduleData.schedule_id} の予定を本当に削除しますか？`)) {
                 try {
@@ -224,22 +222,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 } catch (error) { alert(`削除失敗: ${error.message}`); }
             }
         }
-
-        // 編集ボタンの処理
+        
         if (target.classList.contains('edit-btn')) {
+            // フォームの値を先にセット
             document.getElementById('edit-student-name').textContent = scheduleData.user_name;
-            document.getElementById('edit-class-date').value = scheduleData.class_date;
-            document.getElementById('edit-slot-select').value = scheduleData.slot_id;
+            editClassDateInput.value = scheduleData.class_date;
             document.getElementById('edit-status-select').value = scheduleData.status;
-            document.getElementById('edit-pc-select').value = scheduleData.assigned_pc_id || '';            
-             
-            // document.getElementById('edit-notes').value = scheduleData.notes || ''; // ▼ 備考をセット
-            editMessage.textContent = '';      
+            document.getElementById('edit-pc-select').value = scheduleData.assigned_pc_id || '';
+            document.getElementById('edit-notes').value = scheduleData.notes || '';
+            editMessage.textContent = '';
+
+            // 日付に基づいてコマのドロップダウンを更新し、完了を待つ
+            await updateEditModalSlots();
+            
+            // ドロップダウンが更新された後で、元のコマを選択状態にする
+            editSlotSelect.value = scheduleData.slot_id;
+
             editModal.style.display = 'block';
         }
     });
-
-    // 編集モーダルのフォーム送信
+    editClassDateInput.addEventListener('change', updateEditModalSlots);
     editForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = {
@@ -247,13 +249,11 @@ document.addEventListener('DOMContentLoaded', () => {
             slot_id: document.getElementById('edit-slot-select').value,
             status: document.getElementById('edit-status-select').value,
             assigned_pc_id: document.getElementById('edit-pc-select').value || null,
-            notes: document.getElementById('edit-notes').value 
+            notes: document.getElementById('edit-notes').value
         };
         try {
             const response = await fetch(`/api/schedules/${currentEditingScheduleId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData)
             });
             if (!response.ok) throw new Error((await response.json()).error);
             editModal.style.display = 'none';
@@ -264,18 +264,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // モーダルを閉じる
     closeModalBtn.onclick = () => { editModal.style.display = 'none'; };
+    closeAddModalBtn.onclick = () => { addModal.style.display = 'none'; };
     window.onclick = (e) => {
-         if (e.target == addModal) addModal.style.display = 'none';
-         if (e.target == editModal) editModal.style.display = 'none'; 
-        };
+        if (e.target == addModal) addModal.style.display = 'none';
+        if (e.target == editModal) editModal.style.display = 'none';
+    };
 
-    // --- 初期化処理 ---
-    const initialize = async () => {        
+    const initialize = async () => {
         await Promise.all([
-            // populateSelect('/api/class_slots', document.getElementById('add-slot-select'), 'slot_id', 'slot_name', 'コマを選択'),
-            populateSelect('/api/class_slots', document.getElementById('edit-slot-select'), 'slot_id', 'slot_name', 'コマを選択'),
+            populateSelect('/api/class_slots', document.getElementById('add-slot-select'), 'slot_id', 'slot_name', '日付を選択'),
+            // populateSelect('/api/class_slots', document.getElementById('edit-slot-select'), 'slot_id', 'slot_name', 'コマを選択'),
             populateSelect('/api/pcs', document.getElementById('edit-pc-select'), 'pc_id', (item) => `${item.pc_id} (${item.pc_name})`, 'PCを選択')
         ]);
         fetchSchedules();
