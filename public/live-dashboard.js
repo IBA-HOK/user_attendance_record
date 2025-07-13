@@ -43,58 +43,62 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ライブ状況を取得して表示するメイン関数
     const fetchCurrentClassStatus = async () => {
-        try {
-            const response = await fetch('/api/live/current-class');
-            const data = await response.json();
-            attendeeListContainer.innerHTML = '';
-            if (data.message) { classInfoElem.textContent = data.message; return; }
+    try {
+        const response = await fetch('/api/live/current-class');
+        const data = await response.json();
 
-            if (data.current_class) {
-                const classData = data.current_class;
-                classInfoElem.textContent = `現在の授業: ${classData.slot_name} (${classData.start_time} - ${classData.end_time})`;
+        attendeeListContainer.innerHTML = '';
 
-                if (data.attendees && data.attendees.length > 0) {
-                    data.attendees.forEach(student => {
-                        const card = document.createElement('div');
-                        card.className = student.is_present ? 'attendee-card present' : 'attendee-card absent';
-                        
-                        const statusTag = student.status !== '通常' ? `<span class="status-tag">${student.status}</span>` : '';
-                        const levelTag = student.user_level ? `<span class="level-tag">${student.user_level}</span>` : '';
-                        const notes = student.notes ? `<p class="notes">備考: ${student.notes}</p>` : '';
-
-                        // ▼▼▼ is_present の状態に応じて、表示するボタン群を切り替える ▼▼▼
-                        let controlsHtml = '';
-                        if (student.is_present) {
-                            controlsHtml = `<button class="cancel-btn" data-user-id="${student.user_id}">出席を取り消し</button>`;
-                        } else {
-                            controlsHtml = `
-                                <button class="attend-btn" data-user-id="${student.user_id}">出席を記録</button>
-                                <button class="absent-btn" data-user-id="${student.user_id}">欠席にする</button>
-                            `;
-                        }
-
-                        card.innerHTML = `
-                            <div class="card-header">
-                                <h3>${student.name}</h3>
-                                <div>${levelTag} ${statusTag}</div>
-                            </div>
-                            <p>割当PC: ${student.pc_name || 'N/A'}</p>
-                            ${notes}
-                            <div class="attendance-controls">
-                                ${controlsHtml}
-                            </div>
-                        `;
-                        attendeeListContainer.appendChild(card);
-                    });
-                } else {
-                    attendeeListContainer.innerHTML = '<p>このコマの出席予定者はいません。</p>';
-                }
-            }
-        } catch (error) {
-            console.error("ライブ状況の取得エラー:", error);
-            classInfoElem.textContent = "データの取得に失敗しました。";
+        if (data.message) {
+            classInfoElem.textContent = data.message;
+            return;
         }
-    };
+
+        if (data.current_class) {
+            const classData = data.current_class;
+            classInfoElem.textContent = `現在の授業: ${classData.slot_name} (${classData.start_time} - ${classData.end_time})`;
+
+            if (data.attendees && data.attendees.length > 0) {
+                data.attendees.forEach(student => {
+                    const card = document.createElement('div');
+                    card.className = student.is_present ? 'attendee-card present' : 'attendee-card absent';
+                    
+                    const statusTag = student.status !== '通常' ? `<span class="status-tag">${student.status}</span>` : '';
+                    const levelTag = student.user_level ? `<span class="level-tag">${student.user_level}</span>` : '';
+                    const notes = student.notes ? `<p class="notes">備考: ${student.notes}</p>` : '';
+
+                    let controlsHtml = '';
+                    if (student.is_present) {
+                        controlsHtml = `<button class="cancel-btn" data-user-id="${student.user_id}">出席を取り消し</button>`;
+                    } else {
+                        controlsHtml = `
+                            <button class="attend-btn" data-user-id="${student.user_id}">出席を記録</button>
+                            <button class="absent-btn" data-user-id="${student.user_id}">欠席にする</button>
+                        `;
+                    }
+
+                    card.innerHTML = `
+                        <div class="card-header">
+                            <h3><a href="/info/${student.user_id}" target="_blank">${student.name}</a></h3>
+                            <div>${levelTag} ${statusTag}</div>
+                        </div>
+                        <p>割当PC: ${student.pc_name || 'N/A'}</p>
+                        ${notes}
+                        <div class="attendance-controls">
+                            ${controlsHtml}
+                        </div>
+                    `;
+                    attendeeListContainer.appendChild(card);
+                });
+            } else {
+                attendeeListContainer.innerHTML = '<p>このコマの出席予定者はいません。</p>';
+            }
+        }
+    } catch (error) {
+        console.error("ライブ状況の取得エラー:", error);
+        classInfoElem.textContent = "データの取得に失敗しました。";
+    }
+};
 
     // ボタンのクリックイベント（イベント委任）
     attendeeListContainer.addEventListener('click', (e) => {

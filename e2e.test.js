@@ -149,7 +149,34 @@ describe('E2Eテスト: 全機能総点検', () => {
             await agent.delete(`/api/schedules/${testScheduleId}`).expect(200);
         });
     });
+    describe('複合APIテスト', () => {
+        it('should get all student information with GET /api/student-info/:id', async () => {
+            // 1. Prepare data: a schedule and an entry log for our test user
+            await agent.post('/api/schedules').send({ user_id: 'U001', class_date: '2025-07-21', slot_id: 1, status: '通常' }).expect(201);
+            await agent.post('/api/entry_logs').send({ user_id: 'U001', log_type: 'entry' }).expect(201);
 
+            // 2. Call the new API
+            const res = await agent.get('/api/student-info/U001').expect(200);
+
+            // 3. Verify the aggregated data structure
+            expect(res.body).toHaveProperty('profile');
+            expect(res.body).toHaveProperty('schedules');
+            expect(res.body).toHaveProperty('logs');
+
+            // 4. Verify the content
+            expect(res.body.profile.user_id).toBe('U001');
+            expect(Array.isArray(res.body.schedules)).toBe(true);
+            expect(res.body.schedules.length).toBeGreaterThan(0);
+            expect(res.body.schedules[0].user_id).toBe('U001');
+            expect(Array.isArray(res.body.logs)).toBe(true);
+            expect(res.body.logs.length).toBeGreaterThan(0);
+            expect(res.body.logs[0].user_id).toBe('U001');
+        });
+
+        it('should return 404 for a non-existent student ID', async () => {
+            await agent.get('/api/student-info/non-existent-user').expect(404);
+        });
+    });
     describe('高度なAPIテスト', () => {
         it('ライブ状況API: 授業時間内に正しい情報が返る', async () => {
             const today = new Date();

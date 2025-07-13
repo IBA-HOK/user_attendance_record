@@ -1,5 +1,3 @@
-// server.js (True Final Gatekeeper Edition)
-
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
@@ -51,6 +49,11 @@ app.use(session({
     saveUninitialized: false,
     cookie: { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
 }));
+
+app.get('/info/:id', (req, res) => {
+    // ログインチェックはこのルート自体には不要。中のJSがAPIを叩く際にチェックされる
+    res.sendFile(path.join(__dirname, 'public', 'info.html'));
+});
 
 
 // ==================================================================
@@ -178,6 +181,35 @@ app.delete('/api/users/:id', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません" });
         res.status(200).json({ message: "削除成功" });
+    });
+});
+
+/**
+ * API: 特定の生徒の全情報を取得
+ * GET /api/student-info/:id
+ */
+app.get('/api/student-info/:id', (req, res) => {
+    const { id } = req.params;
+    const studentData = {};
+
+    const userSql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
+    const scheduleSql = "SELECT s.*, c.slot_name FROM schedules s JOIN class_slots c ON s.slot_id = c.slot_id WHERE s.user_id = ? ORDER BY s.class_date DESC";
+    const logSql = "SELECT * FROM entry_logs WHERE user_id = ? AND log_type = 'entry' ORDER BY log_time DESC";
+
+    db.get(userSql, [id], (err, user) => {
+        if (err || !user) return res.status(404).json({ error: "生徒が見つかりません。" });
+        studentData.profile = user;
+
+        db.all(scheduleSql, [id], (err, schedules) => {
+            if (err) return res.status(500).json({ error: err.message });
+            studentData.schedules = schedules;
+
+            db.all(logSql, [id], (err, logs) => {
+                if (err) return res.status(500).json({ error: err.message });
+                studentData.logs = logs;
+                res.json(studentData);
+            });
+        });
     });
 });
 
@@ -641,10 +673,10 @@ app.get('/api/live/current-class', (req, res) => {
         if (err) return res.status(500).json({ error: err.message });
         if (!slot) return res.json({ message: "現在、授業時間外です。" });
 
-        // ▼▼▼ s.notes と u.user_level をSELECT句に追加 ▼▼▼
+        // ▼▼▼ SELECT句に s.status を追加 ▼▼▼
         const getAttendeesSql = `
             SELECT
-                s.user_id, s.notes,
+                s.user_id, s.notes, s.status,
                 u.name, u.user_level,
                 p.pc_name,
                 (SELECT log_time FROM entry_logs 
@@ -692,7 +724,7 @@ app.get('/api/unaccounted', (req, res) => {
                 AND date(el.log_time, '+9 hours') = s.class_date
                 AND el.log_type = 'entry'
             )
-        ORDER BY c.start_time, u.name
+        ORDER BY c.period, u.name -- 
     `;
 
     db.all(sql, [date], (err, rows) => {

@@ -76,8 +76,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // テーブルのセルを生成する
                     tr.innerHTML = `
-                    <td>${user.user_id}</td>
-                    <td>${user.name}</td>
+                    <td><a href="/info/${user.user_id}">${user.user_id}</a></td>
+                    <td><a href="/info/${user.user_id}">${user.name}</a></td>
                     <td>${user.user_level}</td>
                     <td>${user.email || 'N/A'}</td>
                     <td>${user.default_pc_name || 'N/A'}</td>
