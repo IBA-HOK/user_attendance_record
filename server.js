@@ -1,5 +1,3 @@
-// server.js (True Final Gatekeeper Edition)
-
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
@@ -28,17 +26,17 @@ function createApp(db) {
         db.run(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, user_level TEXT DEFAULT '通常', default_pc_id TEXT, FOREIGN KEY (default_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
         db.run(`CREATE TABLE IF NOT EXISTS class_slots (slot_id INTEGER PRIMARY KEY, day_of_week INTEGER NOT NULL, period INTEGER NOT NULL, slot_name TEXT NOT NULL UNIQUE, start_time TEXT, end_time TEXT)`);
         db.run(`CREATE TABLE IF NOT EXISTS schedules (
-                                                         schedule_id INTEGER PRIMARY KEY,
-                                                         user_id TEXT NOT NULL,
-                                                         class_date TEXT NOT NULL,
-                                                         slot_id INTEGER NOT NULL,
-                                                         status TEXT NOT NULL DEFAULT '通常',
-                                                         assigned_pc_id TEXT,
-                                                         notes TEXT, -- ▼▼▼ この行を追記 ▼▼▼
-                                                         FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-            FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE,
-            FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL
-            )`);
+        schedule_id INTEGER PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        class_date TEXT NOT NULL,
+        slot_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT '通常',
+        assigned_pc_id TEXT,
+        notes TEXT, -- ▼▼▼ この行を追記 ▼▼▼
+        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+        FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE,
+        FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL
+    )`);
         db.run(`CREATE TABLE IF NOT EXISTS entry_logs (log_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, log_time TEXT NOT NULL, log_type TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`);
     });
 
@@ -51,6 +49,11 @@ function createApp(db) {
         saveUninitialized: false,
         cookie: { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
     }));
+
+    app.get('/info/:id', (req, res) => {
+        // ログインチェックはこのルート自体には不要。中のJSがAPIを叩く際にチェックされる
+        res.sendFile(path.join(__dirname, 'public', 'info.html'));
+    });
 
 
     // ==================================================================
@@ -181,6 +184,35 @@ function createApp(db) {
         });
     });
 
+    /**
+     * API: 特定の生徒の全情報を取得
+     * GET /api/student-info/:id
+     */
+    app.get('/api/student-info/:id', (req, res) => {
+        const { id } = req.params;
+        const studentData = {};
+
+        const userSql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
+        const scheduleSql = "SELECT s.*, c.slot_name FROM schedules s JOIN class_slots c ON s.slot_id = c.slot_id WHERE s.user_id = ? ORDER BY s.class_date DESC";
+        const logSql = "SELECT * FROM entry_logs WHERE user_id = ? AND log_type = 'entry' ORDER BY log_time DESC";
+
+        db.get(userSql, [id], (err, user) => {
+            if (err || !user) return res.status(404).json({ error: "生徒が見つかりません。" });
+            studentData.profile = user;
+
+            db.all(scheduleSql, [id], (err, schedules) => {
+                if (err) return res.status(500).json({ error: err.message });
+                studentData.schedules = schedules;
+
+                db.all(logSql, [id], (err, logs) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    studentData.logs = logs;
+                    res.json(studentData);
+                });
+            });
+        });
+    });
+
     // --- PC (pcs) CRUD API ---
     app.get('/api/pcs', (req, res) => {
         db.all("SELECT * FROM pcs ORDER BY pc_id", [], (err, rows) => {
@@ -251,9 +283,9 @@ function createApp(db) {
     app.put('/api/class_slots/:id', (req, res) => {
         const { day_of_week, period, slot_name, start_time, end_time } = req.body;
         if (day_of_week == null || !period || !slot_name) return res.status(400).json({ error: "曜日、時限、コマ名は必須です。" });
-        const sql = `UPDATE class_slots SET
-                                            day_of_week = ?, period = ?, slot_name = ?, start_time = ?, end_time = ?
-                     WHERE slot_id = ?`;
+        const sql = `UPDATE class_slots SET 
+        day_of_week = ?, period = ?, slot_name = ?, start_time = ?, end_time = ?
+        WHERE slot_id = ?`;
         db.run(sql, [day_of_week, period, slot_name, start_time, end_time, req.params.id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: "コマが見つかりません。" });
@@ -434,15 +466,15 @@ function createApp(db) {
         const { date, startDate, endDate, status, userId, name } = req.query;
 
         let sql = `
-            SELECT s.schedule_id, s.class_date, s.status, s.notes,
-                   u.user_id, u.name as user_name,
-                   c.slot_id, c.slot_name,
-                   p.pc_id as assigned_pc_id, p.pc_name
-            FROM schedules s
-                     JOIN users u ON s.user_id = u.user_id
-                     JOIN class_slots c ON s.slot_id = c.slot_id
-                     LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
-        `;
+        SELECT s.schedule_id, s.class_date, s.status, s.notes, 
+               u.user_id, u.name as user_name,
+               c.slot_id, c.slot_name,
+               p.pc_id as assigned_pc_id, p.pc_name
+        FROM schedules s
+        JOIN users u ON s.user_id = u.user_id
+        JOIN class_slots c ON s.slot_id = c.slot_id
+        LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
+    `;
         const params = [];
         const conditions = [];
 
@@ -584,10 +616,10 @@ function createApp(db) {
 
             // 対象のスケジュールを特定してステータスを更新
             const updateSql = `
-                UPDATE schedules
-                SET status = '欠席'
-                WHERE user_id = ? AND class_date = ? AND slot_id = ? AND status != '欠席'
-            `;
+            UPDATE schedules 
+            SET status = '欠席' 
+            WHERE user_id = ? AND class_date = ? AND slot_id = ? AND status != '欠席'
+        `;
             db.run(updateSql, [user_id, todayDate, slot.slot_id], function (err) {
                 if (err) {
                     return res.status(500).json({ error: err.message });
@@ -615,9 +647,9 @@ function createApp(db) {
         const todayDate = jstNow.toISOString().split('T')[0];
 
         const sql = `
-            DELETE FROM entry_logs
-            WHERE user_id = ? AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
-        `;
+        DELETE FROM entry_logs 
+        WHERE user_id = ? AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
+    `;
 
         db.run(sql, [user_id, todayDate], function (err) {
             if (err) {
@@ -641,21 +673,21 @@ function createApp(db) {
             if (err) return res.status(500).json({ error: err.message });
             if (!slot) return res.json({ message: "現在、授業時間外です。" });
 
-            // ▼▼▼ s.notes と u.user_level をSELECT句に追加 ▼▼▼
+            // ▼▼▼ SELECT句に s.status を追加 ▼▼▼
             const getAttendeesSql = `
-                SELECT
-                    s.user_id, s.notes,
-                    u.name, u.user_level,
-                    p.pc_name,
-                    (SELECT log_time FROM entry_logs
-                     WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
-                ORDER BY log_time DESC LIMIT 1) as entry_log_time
-                FROM schedules s
-                    JOIN users u ON s.user_id = u.user_id
-                    LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
-                WHERE s.class_date = ? AND s.slot_id = ? AND s.status != '欠席'
-                ORDER BY u.name
-            `;
+            SELECT
+                s.user_id, s.notes, s.status,
+                u.name, u.user_level,
+                p.pc_name,
+                (SELECT log_time FROM entry_logs 
+                 WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
+                 ORDER BY log_time DESC LIMIT 1) as entry_log_time
+            FROM schedules s
+            JOIN users u ON s.user_id = u.user_id
+            LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
+            WHERE s.class_date = ? AND s.slot_id = ? AND s.status != '欠席'
+            ORDER BY u.name
+        `;
             db.all(getAttendeesSql, [todayDate, todayDate, slot.slot_id], (err, attendees) => {
                 if (err) return res.status(500).json({ error: err.message });
                 res.json({
@@ -676,24 +708,24 @@ function createApp(db) {
         }
 
         const sql = `
-            SELECT
-                s.schedule_id, s.class_date, s.status,
-                u.user_id, u.name AS user_name,
-                c.slot_name
-            FROM schedules s
-                     JOIN users u ON s.user_id = u.user_id
-                     JOIN class_slots c ON s.slot_id = c.slot_id
-            WHERE
-                s.class_date = ?
-              AND s.status != '欠席'
+        SELECT 
+            s.schedule_id, s.class_date, s.status,
+            u.user_id, u.name AS user_name,
+            c.slot_name
+        FROM schedules s
+        JOIN users u ON s.user_id = u.user_id
+        JOIN class_slots c ON s.slot_id = c.slot_id
+        WHERE
+            s.class_date = ?
+            AND s.status != '欠席'
             AND NOT EXISTS (
                 SELECT 1 FROM entry_logs el 
                 WHERE el.user_id = s.user_id 
                 AND date(el.log_time, '+9 hours') = s.class_date
                 AND el.log_type = 'entry'
             )
-            ORDER BY c.start_time, u.name
-        `;
+        ORDER BY c.period, u.name -- 
+    `;
 
         db.all(sql, [date], (err, rows) => {
             if (err) {
@@ -789,7 +821,6 @@ module.exports = { createApp }; // 関数をエクスポート
 if (require.main === module) {
     const port = 3000;
     // 本番用のDBでアプリを生成
-
     const db = new sqlite3.Database('./management.db');
     const app = createApp(db);
 
@@ -802,4 +833,3 @@ if (require.main === module) {
         server.close(() => db.close(() => process.exit(0)));
     });
 }
-
