@@ -410,7 +410,6 @@ function createApp(db) {
                 await run(`DELETE FROM ${table}`);
             }
 
-            // ▼▼▼ ここが改修ポイント ▼▼▼
             // sqlite_sequence テーブルが存在しない場合のエラーを握りつぶす
             try {
                 await run("DELETE FROM sqlite_sequence");
@@ -420,7 +419,6 @@ function createApp(db) {
                     throw e; // それ以外の予期せぬエラーは再スローしてトランザクションを失敗させる
                 }
             }
-            // ▲▲▲ 改修ポイントここまで ▲▲▲
 
             for (const table of tablesInOrder) {
                 const records = importData[table];
@@ -579,6 +577,42 @@ function createApp(db) {
                 return res.status(404).json({ error: "対象のスケジュールが見つかりません。" });
             }
             res.status(200).json({ message: "ステータスを正常に更新しました。" });
+        });
+    });
+
+    /**
+     * API: 指定した日付の全スケジュール情報を取得（end_timeも完全に取得）
+     */
+    app.get('/api/daily-roster', (req, res) => {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ error: "日付が指定されていません。" });
+        }
+
+        // JSTでの日付から曜日を計算
+        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
+
+        const sql = `
+        SELECT
+            s.schedule_id, s.status, s.notes,
+            u.user_id, u.name as user_name, u.user_level,
+            c.slot_id, c.slot_name, c.start_time, c.end_time, c.period, -- ▼▼▼ c.end_time を追加 ▼▼▼
+            p.pc_name,
+            (SELECT log_time FROM entry_logs 
+             WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
+             ORDER BY log_time DESC LIMIT 1) as entry_log_time
+        FROM class_slots c
+        LEFT JOIN schedules s ON c.slot_id = s.slot_id AND s.class_date = ?
+        LEFT JOIN users u ON s.user_id = u.user_id
+        LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
+        WHERE c.day_of_week = ?
+        ORDER BY c.period, u.name
+    `;
+
+        // パラメータが3つあることに注意
+        db.all(sql, [date, date, dayOfWeek], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows.map(row => ({ ...row, is_present: !!row.entry_log_time })));
         });
     });
     // --- 入退室ログ (entry_logs) API ---
