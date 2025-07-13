@@ -833,4 +833,3 @@ if (require.main === module) {
         server.close(() => db.close(() => process.exit(0)));
     });
 }
-
