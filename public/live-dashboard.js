@@ -125,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
             dailyClasses = Array.from(slotsMap.values());
 
             if (dailyClasses.length > 0) {
-                // --- ▼ 新しいインテリジェンス・ロジック ▼ ---
                 const now = new Date();
                 const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
 
