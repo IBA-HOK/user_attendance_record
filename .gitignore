@@ -2,3 +2,5 @@
 node_modules/
 *.db
 uploads/
+add.ps1
+server.js.bak
