@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理者設定</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .roles-checkbox-group { display: flex; flex-wrap: wrap; gap: 1rem; border: 1px solid #ccc; padding: 1rem; border-radius: 4px; }
+        .roles-checkbox-group label { margin-right: 0.5rem; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>管理者設定</h1>
+    <p><a href="/index.html">トップページへ</a></p>
+
+    <div class="form-container">
+        <h2>新規管理者登録</h2>
+        <form id="admin-form">
+            <input type="text" id="username" placeholder="ユーザー名" required>
+            <input type="password" id="password" placeholder="パスワード" required>
+            <p><strong>ロールを選択 (複数可):</strong></p>
+            <div id="roles-checkbox-group" class="roles-checkbox-group">
+            </div>
+            <button type="submit" style="margin-top: 1rem;">登録する</button>
+        </form>
+        <p id="message" class="message"></p>
+    </div>
+
+    <div class="table-container">
+        <h2>管理者一覧</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>ユーザー名</th>
+                <th>割り当てられているロール</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="admin-list-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script src="admins.js"></script>
+</body>
+</html>

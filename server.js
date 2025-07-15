@@ -14,29 +14,75 @@ const upload = multer({ dest: 'uploads/' });
 const app = express();
 const port = 3000;
 
-// --- データベース設定 ---
-const db = new sqlite3.Database('./management.db');
+// ==================================================================
+//  権限定義
+// ==================================================================
+const allPermissions = [
+    { name: 'manage_users', description: '生徒の作成・編集・削除' },
+    { name: 'view_users', description: '生徒の一覧・詳細表示' },
+    { name: 'manage_schedules', description: 'スケジュールの作成・編集・削除' },
+    { name: 'view_schedules', description: 'スケジュールの一覧表示' },
+    { name: 'manage_masters', description: 'PC・授業コマの管理' },
+    { name: 'view_masters', description: 'PC・授業コマの表示' },
+    { name: 'perform_backup', description: 'バックアップの実行' },
+    { name: 'manage_admins', description: '管理者とロールの管理' },
+];
+
 function createApp(db) {
     const app = express();
-    // (テーブル作成処理は変更なし)
+
+    // --- データベースのテーブル作成 ---
     db.serialize(() => {
         db.run("PRAGMA foreign_keys = ON;");
-        db.run(`CREATE TABLE IF NOT EXISTS admins (id INTEGER PRIMARY KEY, username TEXT UNIQUE NOT NULL, password_hash TEXT NOT NULL)`);
+
+        // 1. 管理者テーブル (roleカラムは削除)
+        db.run(`CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )`);
+
+        // 2. ロールテーブル (新規)
+        db.run(`CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY,
+            role_name TEXT UNIQUE NOT NULL
+        )`);
+
+        // 3. 権限テーブル (新規)
+        db.run(`CREATE TABLE IF NOT EXISTS permissions (
+            id INTEGER PRIMARY KEY,
+            permission_name TEXT UNIQUE NOT NULL,
+            description TEXT
+        )`);
+
+        // 4. 管理者とロールの紐付けテーブル (新規, 多対多)
+        db.run(`CREATE TABLE IF NOT EXISTS admin_roles (
+            admin_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            FOREIGN KEY(admin_id) REFERENCES admins(id) ON DELETE CASCADE,
+            FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE CASCADE,
+            PRIMARY KEY (admin_id, role_id)
+        )`);
+
+        // 5. ロールと権限の紐付けテーブル (新規, 多対多)
+        db.run(`CREATE TABLE IF NOT EXISTS role_permissions (
+            role_id INTEGER NOT NULL,
+            permission_id INTEGER NOT NULL,
+            FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE CASCADE,
+            FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE CASCADE,
+            PRIMARY KEY (role_id, permission_id)
+        )`);
+
+        // 権限データをDBに挿入
+        const stmt = db.prepare("INSERT OR IGNORE INTO permissions (permission_name, description) VALUES (?, ?)");
+        allPermissions.forEach(p => stmt.run(p.name, p.description));
+        stmt.finalize();
+
+        // (その他のテーブルは変更なし)
         db.run(`CREATE TABLE IF NOT EXISTS pcs (pc_id TEXT PRIMARY KEY, pc_name TEXT NOT NULL, notes TEXT)`);
         db.run(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, user_level TEXT DEFAULT '通常', default_pc_id TEXT, FOREIGN KEY (default_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
         db.run(`CREATE TABLE IF NOT EXISTS class_slots (slot_id INTEGER PRIMARY KEY, day_of_week INTEGER NOT NULL, period INTEGER NOT NULL, slot_name TEXT NOT NULL UNIQUE, start_time TEXT, end_time TEXT)`);
-        db.run(`CREATE TABLE IF NOT EXISTS schedules (
-        schedule_id INTEGER PRIMARY KEY,
-        user_id TEXT NOT NULL,
-        class_date TEXT NOT NULL,
-        slot_id INTEGER NOT NULL,
-        status TEXT NOT NULL DEFAULT '通常',
-        assigned_pc_id TEXT,
-        notes TEXT, -- ▼▼▼ この行を追記 ▼▼▼
-        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE,
-        FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE,
-        FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL
-    )`);
+        db.run(`CREATE TABLE IF NOT EXISTS schedules (schedule_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, class_date TEXT NOT NULL, slot_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT '通常', assigned_pc_id TEXT, notes TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE, FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
         db.run(`CREATE TABLE IF NOT EXISTS entry_logs (log_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, log_time TEXT NOT NULL, log_type TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`);
     });
 
@@ -44,36 +90,71 @@ function createApp(db) {
     app.use(express.json());
     app.use(cookieParser());
     app.use(session({
-        secret: 'this-is-the-final-secret-key-for-our-castle-for-real',
+        secret: 'a-much-more-secure-secret-key-than-before-is-needed',
         resave: false,
         saveUninitialized: false,
         cookie: { httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
     }));
 
-    app.get('/info/:id', (req, res) => {
-        // ログインチェックはこのルート自体には不要。中のJSがAPIを叩く際にチェックされる
-        res.sendFile(path.join(__dirname, 'public', 'info.html'));
-    });
+    // --- 新しい権限チェックミドルウェア ---
+    const checkPermission = (permissionName) => {
+        return async (req, res, next) => {
+            if (!req.session.user || !req.session.user.id) {
+                return res.status(401).json({ error: '認証が必要です。' });
+            }
+            const adminId = req.session.user.id;
 
+            try {
+                // superadminロールを持つかチェック
+                const superadminRole = await new Promise((resolve, reject) => {
+                    db.get(`SELECT r.id FROM roles r JOIN admin_roles ar ON r.id = ar.role_id
+                            WHERE r.role_name = 'superadmin' AND ar.admin_id = ?`, [adminId], (err, row) => {
+                        if (err) reject(err);
+                        resolve(row);
+                    });
+                });
 
-    // ==================================================================
-    //  ルーティングとアクセス制御
-    // ==================================================================
+                if (superadminRole) return next(); // superadminは全権限
 
-    // --- ログイン/ログアウトAPI (誰でもアクセス可能) ---
+                // 必要な権限を持っているかチェック
+                const sql = `
+                    SELECT 1 FROM admin_roles ar
+                    JOIN role_permissions rp ON ar.role_id = rp.role_id
+                    JOIN permissions p ON rp.permission_id = p.id
+                    WHERE ar.admin_id = ? AND p.permission_name = ?
+                `;
+                const hasPermission = await new Promise((resolve, reject) => {
+                    db.get(sql, [adminId, permissionName], (err, row) => {
+                        if (err) reject(err);
+                        resolve(row);
+                    });
+                });
+
+                if (hasPermission) return next();
+
+                return res.status(403).json({ error: 'この操作を行う権限がありません。' });
+
+            } catch (error) {
+                return res.status(500).json({ error: '権限の確認中にエラーが発生しました。' });
+            }
+        };
+    };
+
+    // --- ログイン・認証周り ---
     app.post('/api/login', (req, res) => {
         const { username, password } = req.body;
         db.get('SELECT * FROM admins WHERE username = ?', [username], async (err, admin) => {
             if (err || !admin) return res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
             const match = await bcrypt.compare(password, admin.password_hash);
             if (match) {
-                req.session.user = { id: admin.id, username: admin.username };
+                req.session.user = { id: admin.id, username: admin.username }; // roleは削除
                 res.json({ success: true, redirectTo: '/' });
             } else {
                 res.status(401).json({ error: "ユーザー名またはパスワードが違います。" });
             }
         });
     });
+
     app.post('/api/logout', (req, res) => {
         req.session.destroy(err => {
             if (err) return res.status(500).json({ error: "ログアウト失敗" });
@@ -134,10 +215,88 @@ function createApp(db) {
     //         res.json({ success: true });
     //     });
     // });
+    // --- 【新規】権限(Permissions) API ---
+    app.get('/api/permissions', checkPermission('manage_admins'), (req, res) => {
+        db.all("SELECT id, permission_name, description FROM permissions ORDER BY id", (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
+    });
+
+    // --- 【新規】ロール(Roles) API ---
+    app.get('/api/roles', checkPermission('manage_admins'), (req, res) => {
+        db.all("SELECT id, role_name FROM roles", (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
+    });
+    app.post('/api/roles', checkPermission('manage_admins'), (req, res) => {
+        const { role_name } = req.body;
+        db.run('INSERT INTO roles (role_name) VALUES (?)', [role_name], function(err) {
+            if (err) return res.status(400).json({ error: 'ロール名が重複しています。' });
+            res.status(201).json({ id: this.lastID, role_name });
+        });
+    });
+    app.get('/api/roles/:id/permissions', checkPermission('manage_admins'), (req, res) => {
+        const sql = "SELECT p.id, p.permission_name FROM permissions p JOIN role_permissions rp ON p.id = rp.permission_id WHERE rp.role_id = ?";
+        db.all(sql, [req.params.id], (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows.map(r => r.id)); // 権限IDの配列を返す
+        });
+    });
+    app.post('/api/roles/:id/permissions', checkPermission('manage_admins'), (req, res) => {
+        const roleId = req.params.id;
+        const { permission_ids } = req.body; // [1, 3, 5] のようなIDの配列
+        db.serialize(() => {
+            db.run("DELETE FROM role_permissions WHERE role_id = ?", [roleId]);
+            const stmt = db.prepare("INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)");
+            permission_ids.forEach(pid => stmt.run(roleId, pid));
+            stmt.finalize(err => {
+                if (err) return res.status(500).json({ error: '権限の更新に失敗しました。' });
+                res.json({ success: true });
+            });
+        });
+    });
+    // --- 【更新】管理者(Admins) API ---
+    app.get('/api/admins', checkPermission('manage_admins'), (req, res) => {
+        const sql = `
+            SELECT a.id, a.username, GROUP_CONCAT(r.role_name, ', ') as roles
+            FROM admins a
+            LEFT JOIN admin_roles ar ON a.id = ar.admin_id
+            LEFT JOIN roles r ON ar.role_id = r.id
+            GROUP BY a.id
+        `;
+        db.all(sql, (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.json(rows);
+        });
+    });
+    app.post('/api/admins', checkPermission('manage_admins'), async (req, res) => {
+        const { username, password, role_ids } = req.body;
+        if (!username || !password || !role_ids || role_ids.length === 0) {
+            return res.status(400).json({ error: "ユーザー名、パスワード、最低一つのロールは必須です。" });
+        }
+        try {
+            const hash = await bcrypt.hash(password, 10);
+            const adminSql = 'INSERT INTO admins (username, password_hash) VALUES (?, ?)';
+            db.run(adminSql, [username, hash], function(err) {
+                if (err) return res.status(400).json({ error: "このユーザー名は既に使用されています。" });
+                const adminId = this.lastID;
+                const roleStmt = db.prepare("INSERT INTO admin_roles (admin_id, role_id) VALUES (?, ?)");
+                role_ids.forEach(rid => roleStmt.run(adminId, rid));
+                roleStmt.finalize(err => {
+                    if (err) return res.status(500).json({ error: '管理者のロール設定に失敗しました。' });
+                    res.status(201).json({ id: adminId, username });
+                });
+            });
+        } catch (error) {
+            res.status(500).json({ error: "管理者作成中にエラーが発生しました。" });
+        }
+    });
 
 
     // --- ユーザー (users) CRUD API ---
-    app.get('/api/users', (req, res) => {
+    app.get('/api/users', checkPermission('view_users'), (req, res) => {
         const { name } = req.query;
         let sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id";
         const params = [];
@@ -153,11 +312,10 @@ function createApp(db) {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
-            // ▼▼▼ データを {"users": ...} で包んで返す ▼▼▼
             res.json({ users: rows });
         });
     });
-    app.post('/api/users', (req, res) => {
+    app.post('/api/users', checkPermission('manage_users'), (req, res) => {
         const { user_id, name, email, user_level, default_pc_id } = req.body;
         if (!user_id || !name) return res.status(400).json({ error: "IDと名前は必須" });
         const sql = 'INSERT INTO users (user_id, name, email, user_level, default_pc_id) VALUES (?, ?, ?, ?, ?)';
@@ -853,13 +1011,17 @@ function createApp(db) {
 module.exports = { createApp }; // 関数をエクスポート
 // --- サーバー起動と終了処理 ---
 if (require.main === module) {
-    const port = 3000;
-    // 本番用のDBでアプリを生成
     const db = new sqlite3.Database('./management.db');
     const app = createApp(db);
-
-    const server = app.listen(port, () => {
-        console.log(`サーバーがポート${port}で起動しました。`);
+    const server = app.listen(3000, () => {
+        console.log(`サーバーがポート3000で起動しました。`);
+        // superadminロールの存在を確認し、なければ作成
+        db.get("SELECT id FROM roles WHERE role_name = 'superadmin'", (err, row) => {
+            if (!row) {
+                console.log("初回起動: 'superadmin'ロールを作成します。");
+                db.run("INSERT INTO roles (role_name) VALUES ('superadmin')");
+            }
+        });
     });
 
     process.on('SIGINT', () => {
