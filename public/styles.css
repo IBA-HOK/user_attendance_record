@@ -173,7 +173,6 @@ form button[type="submit"]:hover { background-color: #0069d9; }
 #logout-btn:hover, #reset-btn:hover, .cancel-btn:hover { background-color: #5a6268; }
 
 
-/* ▼▼▼【修正点】無効化された時のスタイルをより具体的に記述 ▼▼▼ */
 /* 4. 無効化された時のスタイル (最優先) */
 button:disabled,
 .delete-btn:disabled,
@@ -183,11 +182,11 @@ button:disabled,
 .absent-btn:disabled,
 .cancel-btn:disabled,
 .delete-role-btn:disabled {
-    background-color: #adb5bd;
-    color: #f8f9fa;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
+    background-color: #adb5bd !important;
+    color: #f8f9fa !important;
+    cursor: not-allowed !important;
+    transform: none !important;
+    box-shadow: none !important;
     opacity: 0.65;
 }
 
@@ -222,6 +221,14 @@ td.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 /* --- ライブダッシュボード --- */
 .live-info-container { text-align: center; margin-bottom: 30px; }
 .date-nav, .class-nav { display: flex; justify-content: space-around; align-items: center; max-width: 600px; margin: 10px auto; }
+
+/* ▼▼▼【修正点】ナビゲーションボタンにデフォルトの色を適用 ▼▼▼ */
+.date-nav button,
+.class-nav button,
+#refresh-btn {
+    background-color: #6c757d;
+}
+
 #attendee-list-container { display: flex; flex-direction: column; gap: 30px; }
 .roster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
 .attendee-card { padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); transition: transform 0.2s, box-shadow 0.2s; border-left: 5px solid #ced4da; }
