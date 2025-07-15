@@ -185,7 +185,10 @@ function createApp(db) {
         // ログインページへ送り返す
         res.redirect('/login.html');
     });
-
+    app.get('/info/:id', (req, res) => {
+        // ログインチェックはこのルート自体には不要。中のJSがAPIを叩く際にチェックされる
+        res.sendFile(path.join(__dirname, 'public', 'info.html'));
+    });
     // 検問所を抜けた者だけが、この先のファイルにアクセスできる
     app.use(express.static(path.join(__dirname, 'public')));
 
