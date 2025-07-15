@@ -222,7 +222,6 @@ td.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .live-info-container { text-align: center; margin-bottom: 30px; }
 .date-nav, .class-nav { display: flex; justify-content: space-around; align-items: center; max-width: 600px; margin: 10px auto; }
 
-/* ▼▼▼【修正点】ナビゲーションボタンにデフォルトの色を適用 ▼▼▼ */
 .date-nav button,
 .class-nav button,
 #refresh-btn {
