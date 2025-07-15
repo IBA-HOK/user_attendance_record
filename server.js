@@ -328,7 +328,53 @@ function createApp(db) {
             });
         });
     });
+    app.put('/api/admins/:id/roles', checkPermission('manage_admins'), (req, res) => {
+        const adminId = req.params.id;
+        const { role_ids } = req.body;
 
+        if (!Array.isArray(role_ids)) {
+            return res.status(400).json({ error: "role_idsは配列である必要があります。" });
+        }
+
+        db.serialize(() => {
+            db.run("BEGIN TRANSACTION");
+            try {
+                // 古いロールを削除
+                db.run("DELETE FROM admin_roles WHERE admin_id = ?", [adminId]);
+
+                // 新しいロールを挿入
+                if (role_ids.length > 0) {
+                    const stmt = db.prepare("INSERT INTO admin_roles (admin_id, role_id) VALUES (?, ?)");
+                    role_ids.forEach(roleId => {
+                        stmt.run(adminId, roleId);
+                    });
+                    stmt.finalize();
+                }
+
+                db.run("COMMIT", (err) => {
+                    if (err) throw err;
+                    res.status(200).json({ message: '管理者のロールを更新しました。' });
+                });
+            } catch (e) {
+                db.run("ROLLBACK");
+                res.status(500).json({ error: `エラーが発生しました: ${e.message}` });
+            }
+        });
+    });
+    app.get('/api/admins/:id/roles', checkPermission('manage_admins'), (req, res) => {
+        const adminId = req.params.id;
+        const sql = `SELECT r.id FROM roles r
+                 JOIN admin_roles ar ON r.id = ar.role_id
+                 WHERE ar.admin_id = ?`;
+        db.all(sql, [adminId], (err, rows) => {
+            if (err) {
+                console.error(`Error fetching roles for admin ${adminId}:`, err.message);
+                return res.status(500).json({ error: err.message });
+            }
+            // 該当するロールのIDを配列として返す
+            res.json(rows.map(r => r.id));
+        });
+    });
     app.get('/api/roles/:id/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         const sql = "SELECT p.id, p.permission_name FROM permissions p JOIN role_permissions rp ON p.id = rp.permission_id WHERE rp.role_id = ?";
         db.all(sql, [req.params.id], (err, rows) => {

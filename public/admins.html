@@ -6,8 +6,21 @@
     <title>管理者設定</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        .roles-checkbox-group { display: flex; flex-wrap: wrap; gap: 1rem; border: 1px solid #ccc; padding: 1rem; border-radius: 4px; }
-        .roles-checkbox-group label { margin-right: 0.5rem; }
+        .roles-checkbox-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+            border: 1px solid #ced4da;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        .roles-checkbox-group label {
+            margin-right: 0.5rem;
+        }
+        .roles-checkbox-group div {
+            display: flex;
+            align-items: center;
+        }
     </style>
 </head>
 <body>
@@ -22,6 +35,7 @@
             <input type="password" id="password" placeholder="パスワード" required>
             <p><strong>ロールを選択 (複数可):</strong></p>
             <div id="roles-checkbox-group" class="roles-checkbox-group">
+                <!-- ロールがここに動的に読み込まれる -->
             </div>
             <button type="submit" style="margin-top: 1rem;">登録する</button>
         </form>
@@ -44,6 +58,26 @@
         </table>
     </div>
 </div>
+
+<!-- ▼▼▼【新規】ロール編集用モーダルを追加 ▼▼▼ -->
+<div id="edit-admin-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>管理者ロール編集</h2>
+        <form id="edit-admin-form">
+            <p><strong>管理者:</strong> <span id="edit-admin-name"></span></p>
+            <div class="form-group">
+                <p><strong>ロールを選択 (複数可):</strong></p>
+                <div id="edit-roles-checkbox-group" class="roles-checkbox-group">
+                    <!-- 編集用のロールがここに動的に読み込まれる -->
+                </div>
+            </div>
+            <button type="submit" style="margin-top: 1rem;">保存</button>
+        </form>
+        <p id="edit-message" class="message"></p>
+    </div>
+</div>
+
 
 <script src="admins.js"></script>
 </body>
