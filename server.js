@@ -216,7 +216,7 @@ function createApp(db) {
     //     });
     // });
     // --- 【新規】権限(Permissions) API ---
-    app.get('/api/permissions', checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         db.all("SELECT id, permission_name, description FROM permissions ORDER BY id", (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows);
@@ -224,27 +224,27 @@ function createApp(db) {
     });
 
     // --- 【新規】ロール(Roles) API ---
-    app.get('/api/roles', checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/roles',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         db.all("SELECT id, role_name FROM roles", (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows);
         });
     });
-    app.post('/api/roles', checkPermission('manage_admins'), (req, res) => {
+    app.post('/api/roles',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         const { role_name } = req.body;
         db.run('INSERT INTO roles (role_name) VALUES (?)', [role_name], function(err) {
             if (err) return res.status(400).json({ error: 'ロール名が重複しています。' });
             res.status(201).json({ id: this.lastID, role_name });
         });
     });
-    app.get('/api/roles/:id/permissions', checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/roles/:id/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         const sql = "SELECT p.id, p.permission_name FROM permissions p JOIN role_permissions rp ON p.id = rp.permission_id WHERE rp.role_id = ?";
         db.all(sql, [req.params.id], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows.map(r => r.id)); // 権限IDの配列を返す
         });
     });
-    app.post('/api/roles/:id/permissions', checkPermission('manage_admins'), (req, res) => {
+    app.post('/api/roles/:id/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         const roleId = req.params.id;
         const { permission_ids } = req.body; // [1, 3, 5] のようなIDの配列
         db.serialize(() => {
@@ -258,7 +258,7 @@ function createApp(db) {
         });
     });
     // --- 【更新】管理者(Admins) API ---
-    app.get('/api/admins', checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/admins',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         const sql = `
             SELECT a.id, a.username, GROUP_CONCAT(r.role_name, ', ') as roles
             FROM admins a
@@ -271,7 +271,7 @@ function createApp(db) {
             res.json(rows);
         });
     });
-    app.post('/api/admins', checkPermission('manage_admins'), async (req, res) => {
+    app.post('/api/admins',checkPermission('manage_admins'),  checkPermission('manage_admins'), async (req, res) => {
         const { username, password, role_ids } = req.body;
         if (!username || !password || !role_ids || role_ids.length === 0) {
             return res.status(400).json({ error: "ユーザー名、パスワード、最低一つのロールは必須です。" });
@@ -296,7 +296,7 @@ function createApp(db) {
 
 
     // --- ユーザー (users) CRUD API ---
-    app.get('/api/users', checkPermission('view_users'), (req, res) => {
+    app.get('/api/users',checkPermission('view_users'),  checkPermission('view_users'), (req, res) => {
         const { name } = req.query;
         let sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id";
         const params = [];
@@ -315,7 +315,7 @@ function createApp(db) {
             res.json({ users: rows });
         });
     });
-    app.post('/api/users', checkPermission('manage_users'), (req, res) => {
+    app.post('/api/users',checkPermission('manage_users'),  checkPermission('manage_users'), (req, res) => {
         const { user_id, name, email, user_level, default_pc_id } = req.body;
         if (!user_id || !name) return res.status(400).json({ error: "IDと名前は必須" });
         const sql = 'INSERT INTO users (user_id, name, email, user_level, default_pc_id) VALUES (?, ?, ?, ?, ?)';
@@ -324,7 +324,7 @@ function createApp(db) {
             res.status(201).json({ user_id });
         });
     });
-    app.put('/api/users/:id', (req, res) => {
+    app.put('/api/users/:id', checkPermission('manage_users'), (req, res) => {
         const { name, email, user_level, default_pc_id } = req.body;
         if (!name) return res.status(400).json({ error: "名前は必須" });
         const sql = `UPDATE users SET name = ?, email = ?, user_level = ?, default_pc_id = ? WHERE user_id = ?`;
@@ -334,7 +334,7 @@ function createApp(db) {
             res.status(200).json({ message: "更新成功" });
         });
     });
-    app.delete('/api/users/:id', (req, res) => {
+    app.delete('/api/users/:id', checkPermission('manage_users'), (req, res) => {
         db.run('DELETE FROM users WHERE user_id = ?', req.params.id, function (err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません" });
@@ -346,7 +346,7 @@ function createApp(db) {
      * API: 特定の生徒の全情報を取得
      * GET /api/student-info/:id
      */
-    app.get('/api/student-info/:id', (req, res) => {
+    app.get('/api/student-info/:id', checkPermission('view_users'), (req, res) => {
         const { id } = req.params;
         const studentData = {};
 
@@ -372,13 +372,13 @@ function createApp(db) {
     });
 
     // --- PC (pcs) CRUD API ---
-    app.get('/api/pcs', (req, res) => {
+    app.get('/api/pcs', checkPermission('view_masters'), (req, res) => {
         db.all("SELECT * FROM pcs ORDER BY pc_id", [], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows);
         });
     });
-    app.post('/api/pcs', (req, res) => {
+    app.post('/api/pcs', checkPermission('manage_masters'), (req, res) => {
         const { pc_id, pc_name, notes } = req.body;
         if (!pc_id || !pc_name) return res.status(400).json({ error: "PC IDと名前は必須" });
         db.run('INSERT INTO pcs (pc_id, pc_name, notes) VALUES (?, ?, ?)', [pc_id, pc_name, notes], (err) => {
@@ -388,7 +388,7 @@ function createApp(db) {
     });
 
 
-    app.put('/api/pcs/:id', (req, res) => {
+    app.put('/api/pcs/:id', checkPermission('manage_masters'), (req, res) => {
         const { pc_name, notes } = req.body;
         if (!pc_name) return res.status(400).json({ error: "PC名は必須です。" });
         db.run('UPDATE pcs SET pc_name = ?, notes = ? WHERE pc_id = ?', [pc_name, notes, req.params.id], function (err) {
@@ -398,7 +398,7 @@ function createApp(db) {
         });
     });
 
-    app.delete('/api/pcs/:id', (req, res) => {
+    app.delete('/api/pcs/:id', checkPermission('manage_masters'), (req, res) => {
         db.run('DELETE FROM pcs WHERE pc_id = ?', [req.params.id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: "PCが見つかりません。" });
@@ -409,7 +409,7 @@ function createApp(db) {
 
     // --- 授業コマ (class_slots) CRUD API ---
 
-    app.post('/api/class_slots', (req, res) => {
+    app.post('/api/class_slots', checkPermission('manage_masters'), (req, res) => {
         const { day_of_week, period, slot_name, start_time, end_time } = req.body;
         if (day_of_week == null || !period || !slot_name) return res.status(400).json({ error: "曜日、時限、コマ名は必須です。" });
         const sql = 'INSERT INTO class_slots (day_of_week, period, slot_name, start_time, end_time) VALUES (?, ?, ?, ?, ?)';
@@ -419,7 +419,7 @@ function createApp(db) {
         });
     });
 
-    app.get('/api/class_slots', (req, res) => {
+    app.get('/api/class_slots', checkPermission('view_masters'), (req, res) => {
         const { dayOfWeek } = req.query; //曜日をクエリパラメータで受け取る
 
         let sql = "SELECT * FROM class_slots";
@@ -438,7 +438,7 @@ function createApp(db) {
         });
     });
 
-    app.put('/api/class_slots/:id', (req, res) => {
+    app.put('/api/class_slots/:id', checkPermission('manage_masters'), (req, res) => {
         const { day_of_week, period, slot_name, start_time, end_time } = req.body;
         if (day_of_week == null || !period || !slot_name) return res.status(400).json({ error: "曜日、時限、コマ名は必須です。" });
         const sql = `UPDATE class_slots SET 
@@ -451,7 +451,7 @@ function createApp(db) {
         });
     });
 
-    app.delete('/api/class_slots/:id', (req, res) => {
+    app.delete('/api/class_slots/:id', checkPermission('manage_masters'), (req, res) => {
         db.run('DELETE FROM class_slots WHERE slot_id = ?', [req.params.id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: "コマが見つかりません。" });
@@ -464,7 +464,7 @@ function createApp(db) {
      * API: 全データのCSVエクスポート (ZIP圧縮)
      * GET /api/export
      */
-    app.get('/api/export', (req, res) => {
+    app.get('/api/export', checkPermission('perform_backup'), (req, res) => {
         const timestamp = new Date().toISOString().replace(/:/g, '-');
         const zipFileName = `backup-${timestamp}.zip`;
 
@@ -529,7 +529,7 @@ function createApp(db) {
      * API: 全データのインポート (ZIP形式のCSVファイルから)
      * POST /api/import
      */
-    app.post('/api/import', upload.single('backupFile'), async (req, res) => {
+    app.post('/api/import', checkPermission('perform_backup'), upload.single('backupFile'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'バックアップファイルがアップロードされていません。' });
         }
@@ -617,7 +617,7 @@ function createApp(db) {
     // --- スケジュール (schedules) API ---
 
     // 【強化版】スケジュールを取得（日付範囲、ステータスでの絞り込みに対応）
-    app.get('/api/schedules', (req, res) => {
+    app.get('/api/schedules', checkPermission('view_schedules'), (req, res) => {
         // ▼▼▼ `date` をクエリパラメータとして受け取る ▼▼▼
         const { date, startDate, endDate, status, userId, name } = req.query;
 
@@ -674,7 +674,7 @@ function createApp(db) {
     });
 
     // スケジュールを一件登録 (振替用)
-    app.post('/api/schedules', (req, res) => {
+    app.post('/api/schedules', checkPermission('manage_schedules'), (req, res) => {
         // ▼▼▼ notes を受け取る ▼▼▼
         const { user_id, class_date, slot_id, status, assigned_pc_id, notes } = req.body;
         if (!user_id || !class_date || !slot_id || !status) return res.status(400).json({ error: "必須項目が不足しています。" });
@@ -687,7 +687,7 @@ function createApp(db) {
     });
 
     // スケジュールを一件更新
-    app.put('/api/schedules/:id', (req, res) => {
+    app.put('/api/schedules/:id', checkPermission('manage_schedules'), (req, res) => {
         // ▼▼▼ notes を受け取る ▼▼▼
         const { class_date, slot_id, status, assigned_pc_id, notes } = req.body;
         if (!class_date || !slot_id || !status) return res.status(400).json({ error: "必須項目が不足しています。" });
@@ -699,7 +699,7 @@ function createApp(db) {
             res.status(200).json({ message: "スケジュールを更新しました。" });
         });
     });
-    app.get('/api/users/:id', (req, res) => {
+    app.get('/api/users/:id', checkPermission('view_users'), (req, res) => {
         const sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
         db.get(sql, [req.params.id], (err, row) => {
             if (err) {
@@ -714,14 +714,14 @@ function createApp(db) {
     });
 
     // 【実装】スケジュールを一件削除
-    app.delete('/api/schedules/:id', (req, res) => {
+    app.delete('/api/schedules/:id', checkPermission('manage_schedules'), (req, res) => {
         db.run('DELETE FROM schedules WHERE schedule_id = ?', [req.params.id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
             if (this.changes === 0) return res.status(404).json({ error: "対象のスケジュールが見つかりません。" });
             res.status(200).json({ message: "スケジュールを削除しました。" });
         });
     });
-    app.put('/api/schedules/:id/status', (req, res) => {
+    app.put('/api/schedules/:id/status', checkPermission('manage_schedules'), (req, res) => {
         const { status } = req.body;
         if (!status) {
             return res.status(400).json({ error: "ステータスが指定されていません。" });
@@ -741,7 +741,7 @@ function createApp(db) {
     /**
      * API: 指定した日付の全スケジュール情報を取得（end_timeも完全に取得）
      */
-    app.get('/api/daily-roster', (req, res) => {
+    app.get('/api/daily-roster', checkPermission('view_schedules'), (req, res) => {
         const { date } = req.query;
         if (!date) {
             return res.status(400).json({ error: "日付が指定されていません。" });
@@ -775,7 +775,7 @@ function createApp(db) {
     });
     // --- 入退室ログ (entry_logs) API ---
 
-    app.post('/api/entry_logs', (req, res) => {
+    app.post('/api/entry_logs', checkPermission('manage_schedules'), (req, res) => {
         const { user_id, log_time, log_type } = req.body;
         if (!user_id || !log_type) return res.status(400).json({ error: "user_idとlog_typeは必須です。" });
         const timeToLog = log_time || new Date().toISOString();
@@ -788,7 +788,7 @@ function createApp(db) {
      * API: ライブダッシュボードから生徒を「欠席」にする
      * POST /api/live/make-absent
      */
-    app.post('/api/live/make-absent', (req, res) => {
+    app.post('/api/live/make-absent', checkPermission('manage_schedules'), (req, res) => {
         const { user_id } = req.body;
         if (!user_id) {
             return res.status(400).json({ error: "user_idが指定されていません。" });
@@ -827,7 +827,7 @@ function createApp(db) {
      * API: 今日の入室ログを削除する（出席取り消し用）
      * DELETE /api/entry_logs/today
      */
-    app.delete('/api/entry_logs/today', (req, res) => {
+    app.delete('/api/entry_logs/today', checkPermission('manage_schedules'), (req, res) => {
         const { user_id } = req.body;
         if (!user_id) {
             return res.status(400).json({ error: "user_idが指定されていません。" });
@@ -853,7 +853,7 @@ function createApp(db) {
             res.status(200).json({ message: "出席記録を取り消しました。" });
         });
     });
-    app.get('/api/live/current-class', (req, res) => {
+    app.get('/api/live/current-class', checkPermission('view_schedules'), (req, res) => {
         const now = new Date();
         const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
         const dayOfWeek = jstNow.getUTCDay();
@@ -893,7 +893,7 @@ function createApp(db) {
      * API: 指定した日に出席記録のない出席予定者を取得
      * GET /api/unaccounted
      */
-    app.get('/api/unaccounted', (req, res) => {
+    app.get('/api/unaccounted', checkPermission('view_schedules'), (req, res) => {
         const { date } = req.query;
         if (!date) {
             return res.status(400).json({ error: "日付が指定されていません。" });
@@ -931,7 +931,7 @@ function createApp(db) {
     /**
      * API: 入退室ログを一件記録
      */
-    app.post('/api/entry_logs', (req, res) => {
+    app.post('/api/entry_logs', checkPermission('manage_schedules'), (req, res) => {
         const { user_id, log_type } = req.body;
         if (!user_id || !log_type) return res.status(400).json({ error: "user_idとlog_typeは必須です。" });
         // JSTでの現在時刻を記録
@@ -949,7 +949,7 @@ function createApp(db) {
      * POST /api/schedules/bulk
      * 指定された生徒とコマで、未来のスケジュールを生成する
      */
-    app.post('/api/schedules/bulk', (req, res) => {
+    app.post('/api/schedules/bulk', checkPermission('manage_schedules'), (req, res) => {
         const { user_id, slot_id, pc_id, term_end_date } = req.body;
 
         if (!user_id || !slot_id || !term_end_date) {
