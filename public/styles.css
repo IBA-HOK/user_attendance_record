@@ -1,137 +1,82 @@
-/* 全体の基本スタイル */
+/*
+ * ポップテーマ CSS (styles.css) - 完全版
+ * アプリケーション全体のスタイルを定義し、ボタンの表示問題を修正。
+ */
+
+/* Google Fontsからモダンな日本語フォントをインポート */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap');
+
+/* --- 基本スタイル --- */
 body {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background-color: #f0f2f5;
-    color: #1c1e21;
+    font-family: 'Noto Sans JP', sans-serif;
+    background-color: #f8f9fa; /* 明るいグレー */
+    color: #495057; /* やや濃いグレー */
     margin: 0;
     padding: 20px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .container {
     max-width: 960px;
     margin: auto;
     background: #ffffff;
-    padding: 20px 30px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1), 0 8px 16px rgba(0, 0, 0, 0.1);
+    padding: 25px 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.07);
+    border: 1px solid #e9ecef;
 }
 
 a {
-    color: #1877f2;
+    color: #007bff;
     text-decoration: none;
+    font-weight: bold;
+    transition: color 0.2s;
 }
 
 a:hover {
-    text-decoration: underline;
+    color: #0056b3;
 }
 
-h1,
-h2 {
-    color: #1c1e21;
-    border-bottom: 2px solid #e4e6eb;
+h1, h2, h3, h4 {
+    color: #343a40;
+    border-bottom: 2px solid #dee2e6;
     padding-bottom: 10px;
     margin-bottom: 20px;
 }
 
 h1 {
     text-align: center;
+    font-size: 2.2em;
+    color: #212529;
 }
 
-/* フォームコンテナ */
+/* ヘッダーやカード内のhタグは下線を消す */
+.portal-header h1,
+.form-container h3,
+.card-header h3,
+.class-nav h2,
+.date-nav h2,
+.roster-section h4 {
+    border-bottom: none;
+    padding-bottom: 0;
+    margin-bottom: 15px;
+}
+
+
+/* --- フォーム関連 --- */
 .form-container {
     margin-bottom: 30px;
-    padding: 20px;
-    background-color: #f7f8fa;
-    border: 1px solid #dddfe2;
+    padding: 25px;
+    background-color: #fff;
+    border: 1px solid #e9ecef;
     border-radius: 8px;
 }
 
-.form-container h3 {
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
-    border-bottom: none;
-}
-
-/* フォームの共通スタイル */
 form {
     display: grid;
-    gap: 12px;
+    gap: 15px;
     align-items: center;
-}
-
-form input[type="text"],
-form input[type="email"],
-form input[type="date"],
-form input[type="time"],
-form input[type="number"],
-form select {
-    padding: 10px;
-    border: 1px solid #dddfe2;
-    border-radius: 6px;
-    font-size: 16px;
-    background-color: #ffffff;
-    box-sizing: border-box;
-    width: 100%;
-}
-
-form button {
-    padding: 10px 20px;
-    border: none;
-    border-radius: 6px;
-    color: white;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background-color 0.2s;
-}
-
-form button[type="submit"] {
-    background-color: #1877f2;
-}
-
-form button[type="submit"]:hover {
-    background-color: #166fe5;
-}
-
-/* 振替管理UI用の追加スタイル */
-.student-search {
-    display: flex;
-    gap: 10px;
-}
-
-.student-search input {
-    flex-grow: 1;
-}
-
-#student-search-results {
-    margin-top: 15px;
-    max-height: 200px;
-    overflow-y: auto;
-}
-
-.search-result-item {
-    padding: 10px;
-    border: 1px solid #dddfe2;
-    border-radius: 6px;
-    margin-bottom: 5px;
-    cursor: pointer;
-    background-color: #fff;
-}
-
-.search-result-item:hover {
-    background-color: #f0f2f5;
-}
-
-#roster-section {
-    margin-top: 20px;
-    padding: 15px;
-    background-color: #e9ebee;
-    border-radius: 8px;
-}
-
-#roster-list {
-    padding-left: 20px;
-    margin: 0;
 }
 
 .form-group {
@@ -143,327 +88,176 @@ form button[type="submit"]:hover {
 .form-group label {
     font-weight: bold;
     font-size: 14px;
-    color: #606770;
+    color: #495057;
 }
 
-
-/* テーブルコンテナ */
-.table-container {
-    overflow-x: auto;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-th,
-td {
+form input[type="text"],
+form input[type="email"],
+form input[type="password"],
+form input[type="date"],
+form input[type="time"],
+form input[type="number"],
+form select,
+form textarea {
     padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid #dddfe2;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    font-size: 16px;
+    font-family: 'Noto Sans JP', sans-serif;
+    background-color: #ffffff;
+    box-sizing: border-box;
+    width: 100%;
+    transition: border-color 0.3s, box-shadow 0.3s;
 }
 
-thead tr {
-    background-color: #e9ebee;
+form input:focus,
+form select:focus,
+form textarea:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25);
 }
 
-tbody tr:nth-of-type(even) {
-    background-color: #f7f8fa;
-}
-
-tbody tr:hover {
-    background-color: #f0f2f5;
-}
-
-/* ボタン類 */
+/* --- ボタン類 --- */
+/* 1. 基本的なボタンスタイル */
+button,
 .delete-btn,
 .edit-btn,
-#reset-btn {
-    padding: 8px 12px;
+.schedule-btn,
+.attend-btn,
+.absent-btn,
+.cancel-btn,
+.delete-role-btn,
+#reset-btn,
+#logout-btn {
+    padding: 10px 20px;
     border: none;
+    border-radius: 8px;
     color: white;
-    border-radius: 6px;
+    font-size: 16px;
+    font-weight: bold;
     cursor: pointer;
-}
-
-.delete-btn {
-    background-color: #fa383e;
-}
-
-.delete-btn:hover {
-    background-color: #e32b31;
-}
-
-.edit-btn {
-    background-color: #42b72a;
-}
-
-.edit-btn:hover {
-    background-color: #36a420;
-}
-
-#reset-btn {
-    background-color: #6c757d;
-}
-
-#reset-btn:hover {
-    background-color: #5a6268;
-}
-
-/* メッセージ表示用のスタイル */
-.message {
+    transition: transform 0.2s, background-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     text-align: center;
-    min-height: 20px;
-    font-weight: bold;
-    padding: 10px;
-    margin-top: 10px;
-    border-radius: 6px;
-    display: none;
-    /* 初期状態では非表示 */
 }
 
-.message.success {
-    display: block;
-    color: #155724;
-    background-color: #d4edda;
-    border: 1px solid #c3e6cb;
+/* 2. 色の定義 */
+form button[type="submit"] { background-color: #007bff; }
+.delete-btn, .delete-role-btn { background-color: #dc3545; }
+.edit-btn { background-color: #28a745; }
+.attend-btn { background-color: #17a2b8; } /* 出席を記録 (水色) */
+.absent-btn { background-color: #fd7e14; } /* 欠席にする (オレンジ) */
+.schedule-btn { background-color: #ffc107; color: #212529; }
+#logout-btn, #reset-btn, .cancel-btn { background-color: #6c757d; }
+
+
+/* 3. ホバー時のスタイル (無効化されていないボタンのみ) */
+button:not(:disabled):hover,
+.delete-btn:not(:disabled):hover,
+.edit-btn:not(:disabled):hover,
+.schedule-btn:not(:disabled):hover,
+.attend-btn:not(:disabled):hover,
+.absent-btn:not(:disabled):hover,
+.cancel-btn:not(:disabled):hover,
+.delete-role-btn:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
 }
+form button[type="submit"]:hover { background-color: #0069d9; }
+.delete-btn:hover, .delete-role-btn:hover { background-color: #c82333; }
+.edit-btn:hover { background-color: #218838; }
+.attend-btn:hover { background-color: #138496; }
+.absent-btn:hover { background-color: #e86a00; }
+.schedule-btn:hover { background-color: #e0a800; }
+#logout-btn:hover, #reset-btn:hover, .cancel-btn:hover { background-color: #5a6268; }
 
-.message.error {
-    display: block;
-    color: #721c24;
-    background-color: #f8d7da;
-    border: 1px solid #f5c6cb;
-}
 
-/* スケジュール管理用のステータス表示スタイル */
-[class^="status-"] {
-    padding: 4px 8px;
-    border-radius: 12px;
-    font-size: 12px;
-    font-weight: bold;
-    color: white;
-}
-
-.status-通常 {
-    background-color: #1877f2;
-}
-
-.status-振替 {
-    background-color: #42b72a;
-}
-
-.status-欠席 {
-    background-color: #6c757d;
-}
-
-/* public/styles.css の中から、既存の .modal と .modal-content の定義を探し出して、以下の内容で完全に置き換える */
-
-/* 編集用モーダル */
-.modal {
-    display: none;
-    /* 初期状態では隠す */
-    position: fixed;
-    /* 画面に固定する */
-    z-index: 100;
-    /* 他の要素より手前に表示 */
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    /* コンテンツが多ければスクロール */
-    background-color: rgba(0, 0, 0, 0.6);
-    /* 半透明の黒い背景 */
-}
-
-.modal-content {
-    background-color: #ffffff;
-    /* ▼▼▼ この margin が中央配置のキモだ ▼▼▼ */
-    margin: 15% auto;
-    /* 上下は画面の15%分空け、左右は自動で中央揃え */
-    padding: 30px;
-    border-radius: 8px;
-    width: 90%;
-    max-width: 500px;
-    position: relative;
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-}
-
-/* ライブダッシュボード用のスタイル */
-.live-info-container {
-    text-align: center;
-    margin-bottom: 30px;
-}
-
-/* public/styles.css に追加または置換 */
-
-#attendee-list-container {
-    display: flex;
-    flex-direction: column;
-    gap: 30px;
-    /* 各セクション間の余白 */
-}
-
-.roster-section h4 {
-    margin-top: 0;
-    margin-bottom: 15px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #ddd;
-}
-
-.roster-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-    gap: 20px;
-}
-
-.attendee-card {
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.attendee-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
-}
-
-.attendee-card.present {
-    background-color: #e8f5e9;
-    /* 出席者は薄緑 */
-    border-left: 5px solid #4caf50;
-}
-
-.attendee-card.absent {
-    background-color: #fff3e0;
-    /* 未入室者は薄橙 */
-    border-left: 5px solid #ff9800;
-}
-
-.attendee-card h3 {
-    margin-top: 0;
-    border-bottom: none;
-    padding-bottom: 0;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.attendee-card p {
-    margin: 5px 0;
-    color: #606770;
-}
-
-.attendance-status {
-    font-weight: bold;
-    font-size: 1.1em;
-    margin-top: 15px !important;
-}
-
-.attendee-card.present .attendance-status {
-    color: #388e3c;
-}
-
-.attendee-card.absent .attendance-status {
-    color: #f57c00;
-}
-
-.status-tag {
-    padding: 3px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-    font-weight: bold;
-    color: white;
-    background-color: #27ae60;
-    /* 振替など */
-}
-
-.card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.card-header h3 {
-    margin-bottom: 10px;
-}
-
-.level-tag {
-    background-color: #8e44ad;
-    color: white;
-    padding: 3px 8px;
-    border-radius: 10px;
-    font-size: 12px;
-}
-
-.notes {
-    font-style: italic;
-    background: #eee;
-    padding: 5px;
-    border-radius: 4px;
-}
-
-.attendance-controls {
-    margin-top: 15px;
-    display: flex;
-    gap: 10px;
-}
-
-.attendance-controls button {
-    flex-grow: 1;
-    padding: 10px;
-    font-weight: bold;
-}
-
-.attend-btn {
-    background-color: #27ae60;
-    color: white;
-}
-
-.absent-btn {
-    background-color: #c0392b;
-    color: white;
-}
-
-.attendance-controls button:disabled {
-    background-color: #bdc3c7;
+/* ▼▼▼【修正点】無効化された時のスタイルをより具体的に記述 ▼▼▼ */
+/* 4. 無効化された時のスタイル (最優先) */
+button:disabled,
+.delete-btn:disabled,
+.edit-btn:disabled,
+.schedule-btn:disabled,
+.attend-btn:disabled,
+.absent-btn:disabled,
+.cancel-btn:disabled,
+.delete-role-btn:disabled {
+    background-color: #adb5bd;
+    color: #f8f9fa;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+    opacity: 0.65;
 }
 
-/* ライブダッシュボードのナビゲーションスタイル */
-.class-nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    max-width: 600px;
-    margin: 0 auto;
-}
 
-.class-nav h2 {
-    border-bottom: none;
-    padding-bottom: 0;
-    margin: 0 15px;
-}
+/* --- テーブル --- */
+.table-container { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+th, td { padding: 14px 18px; text-align: left; border-bottom: 1px solid #dee2e6; }
+thead tr { background-color: #e9ecef; color: #495057; }
+tbody tr:nth-of-type(even) { background-color: #f8f9fa; }
+tbody tr:hover { background-color: #e9ecef; }
+td.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
-.class-nav button {
-    padding: 10px 15px;
-}
+/* --- メッセージ表示 --- */
+.message { text-align: center; font-weight: bold; padding: 12px; margin-top: 10px; border-radius: 8px; display: none; }
+.message.success { display: block; color: #155724; background-color: #d4edda; border: 1px solid #c3e6cb; }
+.message.error { display: block; color: #721c24; background-color: #f8d7da; border: 1px solid #f5c6cb; }
 
-.date-nav {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    max-width: 400px;
-    margin: 0 auto 10px;
-}
+/* --- モーダル --- */
+.modal { display: none; position: fixed; z-index: 100; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0, 0, 0, 0.5); display: flex; align-items: center; justify-content: center; display: none; }
+.modal-content { background-color: #ffffff; padding: 30px; border-radius: 12px; width: 90%; max-width: 500px; position: relative; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3); }
+.close-btn { color: #aaa; position: absolute; top: 10px; right: 20px; font-size: 28px; font-weight: bold; cursor: pointer; }
+.close-btn:hover { color: #333; }
 
-.date-nav h2 {
-    border-bottom: none;
-    padding-bottom: 0;
-}
+/* --- ポータルページ --- */
+.portal-header { display: flex; justify-content: space-between; align-items: center; }
+.portal-menu { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
+.portal-card { padding: 30px 20px; border-radius: 10px; border: 1px solid #dee2e6; box-shadow: 0 1px 4px rgba(0,0,0,0.04); transition: transform 0.2s, box-shadow 0.2s; display: none; }
+.portal-card h2 { color: #007bff; }
+.portal-card:hover { transform: translateY(-4px); box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+
+/* --- ライブダッシュボード --- */
+.live-info-container { text-align: center; margin-bottom: 30px; }
+.date-nav, .class-nav { display: flex; justify-content: space-around; align-items: center; max-width: 600px; margin: 10px auto; }
+#attendee-list-container { display: flex; flex-direction: column; gap: 30px; }
+.roster-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+.attendee-card { padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05); transition: transform 0.2s, box-shadow 0.2s; border-left: 5px solid #ced4da; }
+.attendee-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08); }
+.attendee-card.present { background-color: #eaf7f0; border-left-color: #28a745; }
+.attendee-card.absent { background-color: #fff8e1; border-left-color: #ffc107; }
+.attendee-card p { margin: 5px 0; color: #6c757d; }
+.notes { font-style: italic; background: #f1f3f5; padding: 8px; border-radius: 4px; font-size: 14px; }
+.attendance-controls { margin-top: 15px; display: flex; gap: 10px; }
+.attendance-controls button { flex-grow: 1; padding: 10px; }
+
+/* --- タグ類 --- */
+.status-tag, .level-tag, [class^="status-"] { padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; color: white; }
+.status-通常 { background-color: #007bff; }
+.status-振替 { background-color: #28a745; }
+.status-欠席 { background-color: #6c757d; }
+.level-tag { background-color: #fd7e14; }
+
+/* --- 振替・検索関連 --- */
+.student-search { display: flex; gap: 10px; }
+.student-search input { flex-grow: 1; }
+#student-search-results { margin-top: 15px; max-height: 200px; overflow-y: auto; }
+.search-result-item { padding: 10px; border: 1px solid #dee2e6; border-radius: 6px; margin-bottom: 5px; cursor: pointer; background-color: #fff; }
+.search-result-item:hover { background-color: #f1f3f5; }
+#roster-section { margin-top: 20px; padding: 15px; background-color: #f1f3f5; border-radius: 8px; }
+#roster-list { padding-left: 20px; margin: 0; }
+
+/* --- ロール・権限設定ページ --- */
+.roles-permissions-container { display: flex; flex-wrap: wrap; gap: 2rem; }
+.roles-list { flex: 1; min-width: 250px; }
+.permissions-list { flex: 2; min-width: 300px; }
+.roles-list ul { list-style: none; padding: 0; }
+.roles-list li { display: flex; justify-content: space-between; align-items: center; padding: 10px 15px; border: 1px solid #ced4da; margin-bottom: 8px; cursor: pointer; border-radius: 8px; transition: background-color 0.2s, border-color 0.2s; }
+.roles-list li.selected { background-color: #007bff; color: white; border-color: #007bff; }
+.roles-list li .role-name { font-weight: bold; flex-grow: 1; }
+.delete-role-btn { padding: 4px 12px; font-size: 12px; }
+.permissions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+.permission-item { display: flex; align-items: center; gap: 8px; }
+.permission-item input { width: auto; }
