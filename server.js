@@ -215,6 +215,26 @@ function createApp(db) {
     //         res.json({ success: true });
     //     });
     // });
+    app.delete('/api/admins/:id', checkPermission('manage_admins'), (req, res) => {
+        const adminIdToDelete = parseInt(req.params.id, 10);
+        const currentAdminId = req.session.user.id;
+
+        // 自分自身を削除しようとしていないかチェック
+        if (adminIdToDelete === currentAdminId) {
+            return res.status(400).json({ error: '自分自身のアカウントは削除できません。' });
+        }
+
+        db.run('DELETE FROM admins WHERE id = ?', [adminIdToDelete], function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'データベースエラー: ' + err.message });
+            }
+            if (this.changes === 0) {
+                return res.status(404).json({ error: '指定された管理者が見つかりません。' });
+            }
+            // データベースのCASCADE制約により、admin_rolesの関連レコードも自動で削除される
+            res.status(200).json({ message: '管理者を正常に削除しました。' });
+        });
+    });
     // --- 【新規】権限(Permissions) API ---
     app.get('/api/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         db.all("SELECT id, permission_name, description FROM permissions ORDER BY id", (err, rows) => {
@@ -222,8 +242,54 @@ function createApp(db) {
             res.json(rows);
         });
     });
+    app.get('/api/my-permissions', async (req, res) => {
+        if (!req.session.user || !req.session.user.id) {
+            return res.status(401).json({ error: '認証が必要です。' });
+        }
+        const adminId = req.session.user.id;
 
-    // --- 【新規】ロール(Roles) API ---
+        try {
+            // まずsuperadminロールを持っているか確認
+            const superadminRole = await new Promise((resolve, reject) => {
+                db.get(`SELECT r.id FROM roles r JOIN admin_roles ar ON r.id = ar.role_id
+                        WHERE r.role_name = 'superadmin' AND ar.admin_id = ?`, [adminId], (err, row) => {
+                    if (err) reject(err);
+                    resolve(row);
+                });
+            });
+
+            // superadminなら、システム上の全権限を返す
+            if (superadminRole) {
+                const allPerms = await new Promise((resolve, reject) => {
+                    db.all("SELECT permission_name FROM permissions", [], (err, rows) => {
+                        if (err) reject(err);
+                        resolve(rows.map(r => r.permission_name));
+                    });
+                });
+                return res.json(allPerms);
+            }
+
+            // そうでなければ、割り当てられたロールに基づく権限を返す
+            const sql = `
+                SELECT DISTINCT p.permission_name
+                FROM admin_roles ar
+                JOIN role_permissions rp ON ar.role_id = rp.role_id
+                JOIN permissions p ON rp.permission_id = p.id
+                WHERE ar.admin_id = ?
+            `;
+            const userPermissions = await new Promise((resolve, reject) => {
+                db.all(sql, [adminId], (err, rows) => {
+                    if (err) reject(err);
+                    resolve(rows.map(r => r.permission_name));
+                });
+            });
+
+            res.json(userPermissions);
+
+        } catch (error) {
+            res.status(500).json({ error: '権限の取得中にエラーが発生しました。' });
+        }
+    });
     app.get('/api/roles',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         db.all("SELECT id, role_name FROM roles", (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
@@ -237,6 +303,29 @@ function createApp(db) {
             res.status(201).json({ id: this.lastID, role_name });
         });
     });
+    app.delete('/api/roles/:id', checkPermission('manage_admins'), (req, res) => {
+        const roleId = req.params.id;
+        // 'superadmin' ロールは削除させない
+        db.get("SELECT role_name FROM roles WHERE id = ?", [roleId], (err, role) => {
+            if (err) {
+                return res.status(500).json({ error: "データベースエラー: " + err.message });
+            }
+            if (!role) {
+                return res.status(404).json({ error: "指定されたロールが見つかりません。" });
+            }
+            if (role.role_name === 'superadmin') {
+                return res.status(400).json({ error: " 'superadmin' ロールは削除できません。" });
+            }
+
+            db.run("DELETE FROM roles WHERE id = ?", [roleId], function(err) {
+                if (err) {
+                    return res.status(500).json({ error: "データベースエラー: " + err.message });
+                }
+                res.status(200).json({ message: `ロール「${role.role_name}」を削除しました。` });
+            });
+        });
+    });
+
     app.get('/api/roles/:id/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
         const sql = "SELECT p.id, p.permission_name FROM permissions p JOIN role_permissions rp ON p.id = rp.permission_id WHERE rp.role_id = ?";
         db.all(sql, [req.params.id], (err, rows) => {
@@ -256,6 +345,13 @@ function createApp(db) {
                 res.json({ success: true });
             });
         });
+    });
+    app.get('/api/me', (req, res) => {
+        if (req.session.user) {
+            res.json({ id: req.session.user.id, username: req.session.user.username });
+        } else {
+            res.status(401).json({ error: 'Not authenticated' });
+        }
     });
     // --- 【更新】管理者(Admins) API ---
     app.get('/api/admins',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {

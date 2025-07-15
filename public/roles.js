@@ -24,9 +24,13 @@ document.addEventListener('DOMContentLoaded', () => {
             allRoles = await rolesRes.json();
 
             renderRoles();
-            renderPermissionsCheckboxes();
+            // 権限チェックボックスは一度だけ描画すれば良い
+            if (permissionsGrid.innerHTML === '') {
+                renderPermissionsCheckboxes();
+            }
         } catch (error) {
             messageArea.textContent = `エラー: ${error.message}`;
+            messageArea.className = 'message error';
         }
     };
 
@@ -35,12 +39,27 @@ document.addEventListener('DOMContentLoaded', () => {
         rolesListUl.innerHTML = '';
         allRoles.forEach(role => {
             const li = document.createElement('li');
-            li.textContent = role.role_name;
             li.dataset.roleId = role.id;
+            li.dataset.roleName = role.role_name;
+
+            const roleNameSpan = document.createElement('span');
+            roleNameSpan.className = 'role-name';
+            roleNameSpan.textContent = role.role_name;
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'delete-role-btn';
+            deleteBtn.textContent = '削除';
+            // superadminロールは削除不可
+            if (role.role_name === 'superadmin') {
+                deleteBtn.disabled = true;
+            }
+
+            li.appendChild(roleNameSpan);
+            li.appendChild(deleteBtn);
+
             if (role.id === selectedRoleId) {
                 li.classList.add('selected');
             }
-            li.addEventListener('click', () => handleRoleSelect(role.id, role.role_name));
             rolesListUl.appendChild(li);
         });
     };
@@ -59,10 +78,31 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- イベントハンドラ ---
+    rolesListUl.addEventListener('click', (e) => {
+        const li = e.target.closest('li');
+        if (!li) return;
+
+        const roleId = parseInt(li.dataset.roleId, 10);
+        const roleName = li.dataset.roleName;
+
+        if (e.target.classList.contains('delete-role-btn')) {
+            // 削除ボタンがクリックされた場合
+            handleRoleDelete(roleId, roleName);
+        } else {
+            // liの他の部分がクリックされた場合
+            handleRoleSelect(roleId, roleName);
+        }
+    });
+
+    // ▼▼▼【修正点】この関数のロジックを完全なものに復元 ▼▼▼
     const handleRoleSelect = async (roleId, roleName) => {
         selectedRoleId = roleId;
         renderRoles(); // 選択状態をハイライト
         permissionsTitle.textContent = `「${roleName}」の権限`;
+
+        // メッセージをクリア
+        messageArea.textContent = '';
+        messageArea.className = 'message';
 
         // チェックボックスをリセット
         document.querySelectorAll('#permissions-grid input').forEach(cb => cb.checked = false);
@@ -90,11 +130,46 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (error) {
             messageArea.textContent = `エラー: ${error.message}`;
+            messageArea.className = 'message error';
+        }
+    };
+
+    const handleRoleDelete = async (roleId, roleName) => {
+        if (!confirm(`ロール「${roleName}」を本当に削除しますか？\nこのロールが割り当てられている全ての管理者から、このロールが解除されます。`)) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/roles/${roleId}`, { method: 'DELETE' });
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.error);
+
+            messageArea.textContent = result.message;
+            messageArea.className = 'message success';
+            setTimeout(() => { messageArea.textContent = ''; messageArea.className = 'message'; }, 3000);
+
+            if (selectedRoleId === roleId) {
+                selectedRoleId = null;
+                permissionsTitle.textContent = '権限を選択';
+                document.querySelectorAll('#permissions-grid input').forEach(cb => {
+                    cb.checked = false;
+                    cb.disabled = false;
+                });
+                permissionsForm.querySelector('button').disabled = false;
+            }
+
+            fetchAllData();
+
+        } catch (error) {
+            messageArea.textContent = `エラー: ${error.message}`;
+            messageArea.className = 'message error';
         }
     };
 
     roleForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        messageArea.textContent = '';
+        messageArea.className = 'message';
         try {
             const res = await fetch('/api/roles', {
                 method: 'POST',
@@ -104,14 +179,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await res.json();
             if (!res.ok) throw new Error(result.error);
             roleNameInput.value = '';
-            fetchAllData(); // 全データを再取得して再描画
+            fetchAllData();
         } catch (error) {
             messageArea.textContent = `エラー: ${error.message}`;
+            messageArea.className = 'message error';
         }
     });
 
     permissionsForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        messageArea.textContent = '';
+        messageArea.className = 'message';
+
         if (!selectedRoleId) {
             alert('ロールを選択してください。');
             return;
@@ -125,11 +204,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ permission_ids: selectedPermissionIds }),
             });
-            if (!res.ok) throw new Error('権限の保存に失敗しました。');
+            if (!res.ok) {
+                const errResult = await res.json();
+                throw new Error(errResult.error || '権限の保存に失敗しました。');
+            }
+
             messageArea.textContent = '権限を保存しました。';
-            setTimeout(() => messageArea.textContent = '', 3000);
+            messageArea.classList.add('success');
+
+            setTimeout(() => {
+                messageArea.textContent = '';
+                messageArea.className = 'message';
+            }, 3000);
+
         } catch (error) {
             messageArea.textContent = `エラー: ${error.message}`;
+            messageArea.classList.add('error');
         }
     });
 
