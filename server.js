@@ -185,7 +185,10 @@ function createApp(db) {
         // ログインページへ送り返す
         res.redirect('/login.html');
     });
-
+    app.get('/info/:id', (req, res) => {
+        // ログインチェックはこのルート自体には不要。中のJSがAPIを叩く際にチェックされる
+        res.sendFile(path.join(__dirname, 'public', 'info.html'));
+    });
     // 検問所を抜けた者だけが、この先のファイルにアクセスできる
     app.use(express.static(path.join(__dirname, 'public')));
 
@@ -466,7 +469,30 @@ function createApp(db) {
             });
         });
     });
+    app.get('/api/info/:id', (req, res) => {
+        const { id } = req.params;
+        const studentData = {};
 
+        const userSql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
+        const scheduleSql = "SELECT s.*, c.slot_name FROM schedules s JOIN class_slots c ON s.slot_id = c.slot_id WHERE s.user_id = ? ORDER BY s.class_date DESC";
+        const logSql = "SELECT * FROM entry_logs WHERE user_id = ? AND log_type = 'entry' ORDER BY log_time DESC";
+
+        db.get(userSql, [id], (err, user) => {
+            if (err || !user) return res.status(404).json({ error: "生徒が見つかりません。" });
+            studentData.profile = user;
+
+            db.all(scheduleSql, [id], (err, schedules) => {
+                if (err) return res.status(500).json({ error: err.message });
+                studentData.schedules = schedules;
+
+                db.all(logSql, [id], (err, logs) => {
+                    if (err) return res.status(500).json({ error: err.message });
+                    studentData.logs = logs;
+                    res.json(studentData);
+                });
+            });
+        });
+    });
     // --- PC (pcs) CRUD API ---
     app.get('/api/pcs', checkPermission('view_masters'), (req, res) => {
         db.all("SELECT * FROM pcs ORDER BY pc_id", [], (err, rows) => {
@@ -923,23 +949,19 @@ function createApp(db) {
      * API: 今日の入室ログを削除する（出席取り消し用）
      * DELETE /api/entry_logs/today
      */
-    app.delete('/api/entry_logs/today', checkPermission('manage_schedules'), (req, res) => {
-        const { user_id } = req.body;
-        if (!user_id) {
-            return res.status(400).json({ error: "user_idが指定されていません。" });
+
+    app.delete('/api/entry_logs', (req, res) => {
+        const { user_id, date } = req.body; // 'date' を受け取るように変更
+        if (!user_id || !date) {
+            return res.status(400).json({ error: "user_idとdateが指定されていません。" });
         }
 
-        // JSTでの今日の日付を取得
-        const now = new Date();
-        const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-        const todayDate = jstNow.toISOString().split('T')[0];
-
         const sql = `
-        DELETE FROM entry_logs 
-        WHERE user_id = ? AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
-    `;
+            DELETE FROM entry_logs
+            WHERE user_id = ? AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
+        `;
 
-        db.run(sql, [user_id, todayDate], function (err) {
+        db.run(sql, [user_id, date], function (err) {
             if (err) {
                 return res.status(500).json({ error: err.message });
             }
@@ -950,6 +972,7 @@ function createApp(db) {
         });
     });
     app.get('/api/live/current-class', checkPermission('view_schedules'), (req, res) => {
+
         const now = new Date();
         const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
         const dayOfWeek = jstNow.getUTCDay();

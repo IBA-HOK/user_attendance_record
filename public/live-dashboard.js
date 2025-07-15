@@ -1,5 +1,3 @@
-// public/live-dashboard.js を、以下の内容で完全に置き換える
-
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM要素の取得 ---
     const displayedDateElem = document.getElementById('displayed-date');
@@ -23,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const day = date.getDate().toString().padStart(2, '0');
         return `${year}-${month}-${day}`;
     };
+
     const renderCurrentClassView = () => {
         attendeeListContainer.innerHTML = ''; // 先にクリア
         if (currentClassIndex < 0 || currentClassIndex >= dailyClasses.length) {
@@ -38,6 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const attendees = classData.schedules.filter(s => s.status !== '欠席');
         const absentees = classData.schedules.filter(s => s.status === '欠席');
 
+        // --- 出席予定者のセクション ---
         const attendeesSection = document.createElement('div');
         attendeesSection.className = 'roster-section';
         let attendeeHtml = `<h4>出席予定者 (${attendees.length}名)</h4>`;
@@ -46,13 +46,18 @@ document.addEventListener('DOMContentLoaded', () => {
             attendeeHtml += attendees.map(student => {
                 const card = document.createElement('div');
                 card.className = student.is_present ? 'attendee-card present' : 'attendee-card absent';
-                const statusTag = student.status !== '通常' ? `<span class="status-tag">${student.status}</span>` : '';
+
+                const statusTag = student.status !== '通常' ? `<span class="status-tag status-${student.status}">${student.status}</span>` : '';
                 const levelTag = student.user_level ? `<span class="level-tag">${student.user_level}</span>` : '';
                 const notes = student.notes ? `<p class="notes">備考: ${student.notes}</p>` : '';
-                let controlsHtml = student.is_present
-                    ? `<button class="cancel-btn" data-user-id="${student.user_id}">出席を取り消し</button>`
-                    : `<button class="attend-btn" data-user-id="${student.user_id}">出席を記録</button>
-                   <button class="absent-btn" data-schedule-id="${student.schedule_id}" >欠席にする</button>`;
+
+                let controlsHtml = '';
+                if (student.is_present) {
+                    controlsHtml = `<button class="cancel-btn" data-user-id="${student.user_id}">出席を取り消し</button>`;
+                } else {
+                    controlsHtml = `<button class="attend-btn" data-user-id="${student.user_id}">出席を記録</button>
+                                    <button class="absent-btn" data-schedule-id="${student.schedule_id}">欠席にする</button>`;
+                }
 
                 card.innerHTML = `
                 <div class="card-header">
@@ -71,10 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
         attendeesSection.innerHTML = attendeeHtml;
         attendeeListContainer.appendChild(attendeesSection);
 
-        // --- 欠席予定者の陣 ---
+        // --- 欠席者のセクション ---
         const absenteesSection = document.createElement('div');
         absenteesSection.className = 'roster-section';
-        let absenteeHtml = `<h4>欠席予定者 (${absentees.length}名)</h4>`;
+        let absenteeHtml = `<h4>欠席者 (${absentees.length}名)</h4>`;
         if (absentees.length > 0) {
             absenteeHtml += '<div class="roster-grid">';
             absenteeHtml += absentees.map(student => `
@@ -87,7 +92,7 @@ document.addEventListener('DOMContentLoaded', () => {
         `).join('');
             absenteeHtml += '</div>';
         } else {
-            absenteeHtml += '<p>欠席予定者はいません。</p>';
+            absenteeHtml += '<p>欠席者はいません。</p>';
         }
         absenteesSection.innerHTML = absenteeHtml;
         attendeeListContainer.appendChild(absenteesSection);
@@ -95,6 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         prevClassBtn.disabled = (currentClassIndex <= 0);
         nextClassBtn.disabled = (currentClassIndex >= dailyClasses.length - 1);
     };
+
     const loadDay = async (dateObj) => {
         displayedDate = dateObj;
         const dateString = formatDate(displayedDate);
@@ -106,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const response = await fetch(`/api/daily-roster?date=${dateString}`);
+            if (!response.ok) throw new Error('データ取得に失敗しました');
             const results = await response.json();
             if (!Array.isArray(results)) throw new Error("無効なデータ形式");
 
@@ -127,33 +134,25 @@ document.addEventListener('DOMContentLoaded', () => {
             if (dailyClasses.length > 0) {
                 const now = new Date();
                 const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-
-                let bestMatchIndex = 0; // デフォルトは最初の授業
+                let bestMatchIndex = 0;
                 let foundCurrent = false;
-
                 for (let i = 0; i < dailyClasses.length; i++) {
                     const classSlot = dailyClasses[i];
-                    // 1. 進行中の授業があれば、それが最優先
                     if (classSlot.start_time <= currentTime && classSlot.end_time > currentTime) {
                         bestMatchIndex = i;
                         foundCurrent = true;
-                        break; // 最適解が見つかったのでループを抜ける
+                        break;
                     }
-                    // 2. 進行中の授業がなく、未来の授業が見つかった場合、それを仮の最適解とする
                     if (!foundCurrent && classSlot.start_time > currentTime) {
                         bestMatchIndex = i;
-                        foundCurrent = true; // 未来の授業が見つかったので、これ以上探す必要はない
+                        foundCurrent = true;
                         break;
                     }
                 }
-                // 3. 進行中も未来の授業も見つからなければ、最後の授業を表示
-                if (!foundCurrent) {
+                if (!foundCurrent && dailyClasses.length > 0) {
                     bestMatchIndex = dailyClasses.length - 1;
                 }
-
                 currentClassIndex = bestMatchIndex;
-                // --- ▲ ロジックここまで ▲ ---
-
             } else {
                 currentClassIndex = -1;
             }
@@ -172,8 +171,6 @@ document.addEventListener('DOMContentLoaded', () => {
     nextClassBtn.addEventListener('click', () => { if (currentClassIndex < dailyClasses.length - 1) { currentClassIndex++; renderCurrentClassView(); } });
     refreshBtn.addEventListener('click', () => loadDay(displayedDate));
 
-    // live-dashboard.js 内のこのイベントリスナーを置き換え
-
     attendeeListContainer.addEventListener('click', async (e) => {
         const target = e.target;
         const userId = target.dataset.userId;
@@ -181,18 +178,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             if (target.classList.contains('attend-btn') && userId) {
+                // ▼▼▼【修正点 1/2】出席記録時にも、表示している日付のタイムスタンプを送信する ▼▼▼
+                const dateString = formatDate(displayedDate);
+                const logTimeForDate = new Date(`${dateString}T12:00:00+09:00`).toISOString();
+
                 const response = await fetch('/api/entry_logs', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId, log_type: 'entry' })
+                    body: JSON.stringify({
+                        user_id: userId,
+                        log_type: 'entry',
+                        log_time: logTimeForDate // 表示中の日付で記録
+                    })
                 });
                 if (!response.ok) throw new Error('出席記録に失敗しました');
                 loadDay(displayedDate);
             }
             else if (target.classList.contains('cancel-btn') && userId) {
-                if (confirm(`生徒: ${userId} の出席記録を取り消しますか？`)) {
-                    const response = await fetch('/api/entry_logs/today', {
+                if (confirm(`生徒ID: ${userId} の出席記録を取り消しますか？`)) {
+                    // ▼▼▼【修正点 2/2】APIのエンドポイントと送信データを修正 ▼▼▼
+                    const dateString = formatDate(displayedDate);
+                    const response = await fetch('/api/entry_logs', {
                         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ user_id: userId })
+                        body: JSON.stringify({ user_id: userId, date: dateString })
                     });
                     if (!response.ok) throw new Error((await response.json()).error || '出席取り消しに失敗');
                     loadDay(displayedDate);

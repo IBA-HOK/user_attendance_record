@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getTodayString = () => {
         const today = new Date();
-        today.setHours(today.getHours() + 9);
+        today.setHours(today.getHours() + 9); // JSTに補正
         return today.toISOString().split('T')[0];
     };
 
@@ -15,7 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
         listTitle.textContent = `${date} の出席未記録者リスト`;
         table.style.display = 'none';
         tableBody.innerHTML = '<tr><td colspan="3">データを取得中...</td></tr>';
-        
+
         try {
             const response = await fetch(`/api/unaccounted?date=${date}`);
             if (!response.ok) throw new Error('データの取得に失敗しました。');
@@ -61,11 +61,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (target.classList.contains('attend-btn')) {
             const userId = target.dataset.userId;
+            const targetDate = targetDateInput.value;
+
+            // ▼▼▼【修正点】選択した日付のタイムスタンプを生成して送信 ▼▼▼
+            // タイムゾーン問題を避けるため、お昼の12時でタイムスタンプを生成
+            const logTimeForDate = new Date(`${targetDate}T12:00:00+09:00`).toISOString();
+
             try {
                 const response = await fetch('/api/entry_logs', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ user_id: userId, log_type: 'entry' })
+                    body: JSON.stringify({
+                        user_id: userId,
+                        log_type: 'entry',
+                        log_time: logTimeForDate // タイムスタンプをAPIに渡す
+                    })
                 });
                 if (!response.ok) throw new Error('出席記録に失敗');
                 row.remove();
@@ -75,7 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (target.classList.contains('absent-btn')) {
             const scheduleId = target.dataset.scheduleId;
             try {
-                 const response = await fetch(`/api/schedules/${scheduleId}/status`, {
+                const response = await fetch(`/api/schedules/${scheduleId}/status`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ status: '欠席' })
@@ -85,8 +95,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) { alert(`エラー: ${error.message}`); }
         }
     });
-    
+
     targetDateInput.value = getTodayString();
-    // ページ読み込み時に自動で今日の結果を表示
     fetchUnaccountedStudents(getTodayString());
 });
