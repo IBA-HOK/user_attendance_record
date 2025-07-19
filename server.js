@@ -451,22 +451,26 @@ function createApp(db) {
 
 
     // --- ユーザー (users) CRUD API ---
-    app.get('/api/users', checkPermission('view_users'), checkPermission('view_users'), (req, res) => {
+    app.get('/api/users', checkPermission('view_users'), (req, res) => {
         const { name } = req.query;
-        let sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id";
+        // users, pcs, class_slotsをLEFT JOINして必要な名前をすべて取得する
+        let sql = `
+            SELECT 
+                u.*, 
+                p.pc_name as default_pc_name, 
+                c.slot_name as default_slot_name 
+            FROM users u 
+            LEFT JOIN pcs p ON u.default_pc_id = p.pc_id 
+            LEFT JOIN class_slots c ON u.default_slot_id = c.slot_id
+        `;
         const params = [];
-
         if (name) {
             sql += " WHERE u.name LIKE ?";
             params.push(`%${name}%`);
         }
-
         sql += " ORDER BY u.name";
-
         db.all(sql, params, (err, rows) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
+            if (err) return res.status(500).json({ error: err.message });
             res.json({ users: rows });
         });
     });

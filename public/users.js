@@ -2,13 +2,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- DOM要素の取得 ---
     const userForm = document.getElementById('user-form');
     const pcSelect = document.getElementById('default-pc');
-    const slotSelect = document.getElementById('default-slot'); // 新規登録用コマ
+    const slotSelect = document.getElementById('default-slot');
     const messageArea = document.getElementById('message');
     const userListBody = document.getElementById('user-list-body');
     const editUserModal = document.getElementById('edit-user-modal');
     const editUserForm = document.getElementById('edit-user-form');
     const editPcSelect = document.getElementById('edit-default-pc');
-    const editSlotSelect = document.getElementById('edit-default-slot'); // 編集用コマ
+    const editSlotSelect = document.getElementById('edit-default-slot');
     const editMessageArea = document.getElementById('edit-message');
     const closeEditModalBtn = editUserModal.querySelector('.close-btn');
     let currentEditingUserId = null;
@@ -18,7 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error('サーバーからのデータ取得に失敗');
-            const items = await response.json();
+            const data = await response.json();
+            // APIの応答が { users: [...] } のようなオブジェクトか、配列かを判定
+            const items = Array.isArray(data) ? data : data.users;
+
             selectElement.innerHTML = `<option value="">-- ${defaultText} --</option>`;
             if (items && Array.isArray(items)) {
                 items.forEach(item => {
@@ -75,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
             email: document.getElementById('email').value,
             user_level: document.getElementById('user-level').value,
             default_pc_id: pcSelect.value || null,
-            default_slot_id: slotSelect.value || null, // ▼▼▼【修正】値を取得
+            default_slot_id: slotSelect.value || null,
         };
         try {
             const response = await fetch('/api/users', {
@@ -108,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-email').value = userData.email || '';
             document.getElementById('edit-user-level').value = userData.user_level || '通常';
             editPcSelect.value = userData.default_pc_id || '';
-            editSlotSelect.value = userData.default_slot_id || ''; // ▼▼▼【修正】値を設定
+            editSlotSelect.value = userData.default_slot_id || '';
             editMessageArea.textContent = '';
             editUserModal.style.display = 'block';
         }
@@ -133,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
             email: document.getElementById('edit-email').value,
             user_level: document.getElementById('edit-user-level').value,
             default_pc_id: editPcSelect.value || null,
-            default_slot_id: editSlotSelect.value || null, // ▼▼▼【修正】値を取得
+            default_slot_id: editSlotSelect.value || null,
         };
         try {
             const response = await fetch(`/api/users/${currentEditingUserId}`, {
@@ -159,7 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await Promise.all([
             populateSelect('/api/pcs', pcSelect, 'pc_id', pcTextFieldFn, 'PCを選択'),
             populateSelect('/api/pcs', editPcSelect, 'pc_id', pcTextFieldFn, 'PCを選択'),
-            populateSelect('/api/class_slots', slotSelect, 'slot_id', 'slot_name', '通常授業コマを選択 (任意)'), // ▼▼▼【追加】
+            populateSelect('/api/class_slots', slotSelect, 'slot_id', 'slot_name', '通常授業コマを選択 (任意)'),
             populateSelect('/api/class_slots', editSlotSelect, 'slot_id', 'slot_name', 'コマを選択')
         ]);
         fetchUsers();
