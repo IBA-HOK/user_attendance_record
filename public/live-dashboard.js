@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- DOM要素の取得 ---
     const displayedDateElem = document.getElementById('displayed-date');
     const classInfoElem = document.getElementById('current-class-info');
     const attendeeListContainer = document.getElementById('attendee-list-container');
@@ -8,22 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevClassBtn = document.getElementById('prev-class-btn');
     const nextClassBtn = document.getElementById('next-class-btn');
     const refreshBtn = document.getElementById('refresh-btn');
-
-    // --- 状態管理 ---
-    let displayedDate = new Date(new Date().getTime() + 9 * 60 * 60 * 1000); // JST
+    let displayedDate = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     let dailyClasses = [];
     let currentClassIndex = -1;
 
-    // --- 関数定義 ---
-    const formatDate = (date) => {
-        const year = date.getFullYear();
-        const month = (date.getMonth() + 1).toString().padStart(2, '0');
-        const day = date.getDate().toString().padStart(2, '0');
-        return `${year}-${month}-${day}`;
-    };
+    const formatDate = (date) => date.toISOString().split('T')[0];
 
     const renderCurrentClassView = () => {
-        attendeeListContainer.innerHTML = ''; // 先にクリア
+        attendeeListContainer.innerHTML = '';
         if (currentClassIndex < 0 || currentClassIndex >= dailyClasses.length) {
             classInfoElem.textContent = "表示できる授業がありません。";
             prevClassBtn.disabled = true;
@@ -37,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const attendees = classData.schedules.filter(s => s.status !== '欠席');
         const absentees = classData.schedules.filter(s => s.status === '欠席');
 
-        // --- 出席予定者のセクション ---
         const attendeesSection = document.createElement('div');
         attendeesSection.className = 'roster-section';
         let attendeeHtml = `<h4>出席予定者 (${attendees.length}名)</h4>`;
@@ -46,19 +36,16 @@ document.addEventListener('DOMContentLoaded', () => {
             attendeeHtml += attendees.map(student => {
                 const card = document.createElement('div');
                 card.className = student.is_present ? 'attendee-card present' : 'attendee-card absent';
-
-                const statusTag = student.status !== '通常' ? `<span class="status-tag status-${student.status}">${student.status}</span>` : '';
+                const statusTag = student.status !== '通常' ? `<span class="status-tag status-${student.status.toLowerCase()}">${student.status}</span>` : '';
                 const levelTag = student.user_level ? `<span class="level-tag">${student.user_level}</span>` : '';
                 const notes = student.notes ? `<p class="notes">備考: ${student.notes}</p>` : '';
-
                 let controlsHtml = '';
                 if (student.is_present) {
                     controlsHtml = `<button class="cancel-btn" data-user-id="${student.user_id}">出席を取り消し</button>`;
                 } else {
                     controlsHtml = `<button class="attend-btn" data-user-id="${student.user_id}">出席を記録</button>
-                                    <button class="absent-btn" data-schedule-id="${student.schedule_id}">欠席にする</button>`;
+                                    <button class="absent-btn" data-user-id="${student.user_id}" data-slot-id="${student.slot_id}" data-schedule-id="${student.schedule_id || ''}">欠席にする</button>`;
                 }
-
                 card.innerHTML = `
                 <div class="card-header">
                     <h3><a href="/info/${student.user_id}" target="_blank">${student.user_name}</a></h3>
@@ -76,7 +63,6 @@ document.addEventListener('DOMContentLoaded', () => {
         attendeesSection.innerHTML = attendeeHtml;
         attendeeListContainer.appendChild(attendeesSection);
 
-        // --- 欠席者のセクション ---
         const absenteesSection = document.createElement('div');
         absenteesSection.className = 'roster-section';
         let absenteeHtml = `<h4>欠席者 (${absentees.length}名)</h4>`;
@@ -88,8 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <h3><a href="/info/${student.user_id}" target="_blank">${student.user_name}</a></h3>
                     <div><span class="status-tag status-欠席">${student.status}</span></div>
                 </div>
-            </div>
-        `).join('');
+            </div>`).join('');
             absenteeHtml += '</div>';
         } else {
             absenteeHtml += '<p>欠席者はいません。</p>';
@@ -129,28 +114,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     slotsMap.get(row.slot_id).schedules.push(row);
                 }
             });
-            dailyClasses = Array.from(slotsMap.values());
+            dailyClasses = Array.from(slotsMap.values()).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
             if (dailyClasses.length > 0) {
                 const now = new Date();
                 const currentTime = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
                 let bestMatchIndex = 0;
-                let foundCurrent = false;
-                for (let i = 0; i < dailyClasses.length; i++) {
-                    const classSlot = dailyClasses[i];
-                    if (classSlot.start_time <= currentTime && classSlot.end_time > currentTime) {
-                        bestMatchIndex = i;
-                        foundCurrent = true;
-                        break;
+                if (formatDate(now) === dateString) {
+                    let foundCurrent = false;
+                    for (let i = 0; i < dailyClasses.length; i++) {
+                        const classSlot = dailyClasses[i];
+                        if (classSlot.start_time <= currentTime && classSlot.end_time > currentTime) {
+                            bestMatchIndex = i;
+                            foundCurrent = true;
+                            break;
+                        }
+                        if (!foundCurrent && classSlot.start_time > currentTime) {
+                            bestMatchIndex = i;
+                            foundCurrent = true;
+                            break;
+                        }
                     }
-                    if (!foundCurrent && classSlot.start_time > currentTime) {
-                        bestMatchIndex = i;
-                        foundCurrent = true;
-                        break;
-                    }
-                }
-                if (!foundCurrent && dailyClasses.length > 0) {
-                    bestMatchIndex = dailyClasses.length - 1;
+                    if (!foundCurrent && dailyClasses.length > 0) bestMatchIndex = dailyClasses.length - 1;
                 }
                 currentClassIndex = bestMatchIndex;
             } else {
@@ -163,40 +148,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-
-    // --- イベントリスナー ---
-    prevDayBtn.addEventListener('click', () => { displayedDate.setDate(displayedDate.getDate() - 1); loadDay(displayedDate); });
-    nextDayBtn.addEventListener('click', () => { displayedDate.setDate(displayedDate.getDate() + 1); loadDay(displayedDate); });
-    prevClassBtn.addEventListener('click', () => { if (currentClassIndex > 0) { currentClassIndex--; renderCurrentClassView(); } });
-    nextClassBtn.addEventListener('click', () => { if (currentClassIndex < dailyClasses.length - 1) { currentClassIndex++; renderCurrentClassView(); } });
-    refreshBtn.addEventListener('click', () => loadDay(displayedDate));
-
     attendeeListContainer.addEventListener('click', async (e) => {
         const target = e.target;
         const userId = target.dataset.userId;
-        const scheduleId = target.dataset.scheduleId;
+        const dateString = formatDate(displayedDate);
 
         try {
             if (target.classList.contains('attend-btn') && userId) {
-                // ▼▼▼【修正点 1/2】出席記録時にも、表示している日付のタイムスタンプを送信する ▼▼▼
-                const dateString = formatDate(displayedDate);
                 const logTimeForDate = new Date(`${dateString}T12:00:00+09:00`).toISOString();
-
                 const response = await fetch('/api/entry_logs', {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: userId,
-                        log_type: 'entry',
-                        log_time: logTimeForDate // 表示中の日付で記録
-                    })
+                    body: JSON.stringify({ user_id: userId, log_type: 'entry', log_time: logTimeForDate })
                 });
                 if (!response.ok) throw new Error('出席記録に失敗しました');
                 loadDay(displayedDate);
             }
             else if (target.classList.contains('cancel-btn') && userId) {
                 if (confirm(`生徒ID: ${userId} の出席記録を取り消しますか？`)) {
-                    // ▼▼▼【修正点 2/2】APIのエンドポイントと送信データを修正 ▼▼▼
-                    const dateString = formatDate(displayedDate);
                     const response = await fetch('/api/entry_logs', {
                         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ user_id: userId, date: dateString })
@@ -205,11 +173,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     loadDay(displayedDate);
                 }
             }
-            else if (target.classList.contains('absent-btn') && scheduleId) {
+            else if (target.classList.contains('absent-btn')) {
+                const slotId = target.dataset.slotId;
+                if (!userId || !slotId) return;
+
                 if (confirm(`この生徒を「欠席」として記録しますか？`)) {
-                    const response = await fetch(`/api/schedules/${scheduleId}/status`, {
-                        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ status: '欠席' })
+                    const response = await fetch(`/api/live/make-absent`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            user_id: userId,
+                            class_date: dateString,
+                            slot_id: slotId
+                        })
                     });
                     if (!response.ok) throw new Error((await response.json()).error || '欠席記録に失敗');
                     loadDay(displayedDate);
@@ -221,6 +197,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // --- 初期化実行 ---
+    prevDayBtn.addEventListener('click', () => { displayedDate.setDate(displayedDate.getDate() - 1); loadDay(displayedDate); });
+    nextDayBtn.addEventListener('click', () => { displayedDate.setDate(displayedDate.getDate() + 1); loadDay(displayedDate); });
+    prevClassBtn.addEventListener('click', () => { if (currentClassIndex > 0) { currentClassIndex--; renderCurrentClassView(); } });
+    nextClassBtn.addEventListener('click', () => { if (currentClassIndex < dailyClasses.length - 1) { currentClassIndex++; renderCurrentClassView(); } });
+    refreshBtn.addEventListener('click', () => loadDay(displayedDate));
+
     loadDay(new Date());
 });

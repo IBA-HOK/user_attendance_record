@@ -80,7 +80,17 @@ function createApp(db) {
 
         // (その他のテーブルは変更なし)
         db.run(`CREATE TABLE IF NOT EXISTS pcs (pc_id TEXT PRIMARY KEY, pc_name TEXT NOT NULL, notes TEXT)`);
-        db.run(`CREATE TABLE IF NOT EXISTS users (user_id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT, user_level TEXT DEFAULT '通常', default_pc_id TEXT, FOREIGN KEY (default_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
+
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+            user_id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT,
+            user_level TEXT DEFAULT '通常',
+            default_pc_id TEXT,
+            default_slot_id INTEGER,  -- <<< このカラムを追加
+            FOREIGN KEY (default_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL,
+            FOREIGN KEY (default_slot_id) REFERENCES class_slots(slot_id) ON DELETE SET NULL -- <<< 外部キー制約を追加
+        )`);
         db.run(`CREATE TABLE IF NOT EXISTS class_slots (slot_id INTEGER PRIMARY KEY, day_of_week INTEGER NOT NULL, period INTEGER NOT NULL, slot_name TEXT NOT NULL UNIQUE, start_time TEXT, end_time TEXT)`);
         db.run(`CREATE TABLE IF NOT EXISTS schedules (schedule_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, class_date TEXT NOT NULL, slot_id INTEGER NOT NULL, status TEXT NOT NULL DEFAULT '通常', assigned_pc_id TEXT, notes TEXT, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE, FOREIGN KEY (slot_id) REFERENCES class_slots(slot_id) ON DELETE CASCADE, FOREIGN KEY (assigned_pc_id) REFERENCES pcs(pc_id) ON DELETE SET NULL)`);
         db.run(`CREATE TABLE IF NOT EXISTS entry_logs (log_id INTEGER PRIMARY KEY, user_id TEXT NOT NULL, log_time TEXT NOT NULL, log_type TEXT NOT NULL, FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE)`);
@@ -227,7 +237,7 @@ function createApp(db) {
             return res.status(400).json({ error: '自分自身のアカウントは削除できません。' });
         }
 
-        db.run('DELETE FROM admins WHERE id = ?', [adminIdToDelete], function(err) {
+        db.run('DELETE FROM admins WHERE id = ?', [adminIdToDelete], function (err) {
             if (err) {
                 return res.status(500).json({ error: 'データベースエラー: ' + err.message });
             }
@@ -239,7 +249,7 @@ function createApp(db) {
         });
     });
     // --- 【新規】権限(Permissions) API ---
-    app.get('/api/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/permissions', checkPermission('manage_admins'), checkPermission('manage_admins'), (req, res) => {
         db.all("SELECT id, permission_name, description FROM permissions ORDER BY id", (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows);
@@ -293,15 +303,15 @@ function createApp(db) {
             res.status(500).json({ error: '権限の取得中にエラーが発生しました。' });
         }
     });
-    app.get('/api/roles',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/roles', checkPermission('manage_admins'), checkPermission('manage_admins'), (req, res) => {
         db.all("SELECT id, role_name FROM roles", (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows);
         });
     });
-    app.post('/api/roles',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
+    app.post('/api/roles', checkPermission('manage_admins'), checkPermission('manage_admins'), (req, res) => {
         const { role_name } = req.body;
-        db.run('INSERT INTO roles (role_name) VALUES (?)', [role_name], function(err) {
+        db.run('INSERT INTO roles (role_name) VALUES (?)', [role_name], function (err) {
             if (err) return res.status(400).json({ error: 'ロール名が重複しています。' });
             res.status(201).json({ id: this.lastID, role_name });
         });
@@ -320,7 +330,7 @@ function createApp(db) {
                 return res.status(400).json({ error: " 'superadmin' ロールは削除できません。" });
             }
 
-            db.run("DELETE FROM roles WHERE id = ?", [roleId], function(err) {
+            db.run("DELETE FROM roles WHERE id = ?", [roleId], function (err) {
                 if (err) {
                     return res.status(500).json({ error: "データベースエラー: " + err.message });
                 }
@@ -375,14 +385,14 @@ function createApp(db) {
             res.json(rows.map(r => r.id));
         });
     });
-    app.get('/api/roles/:id/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/roles/:id/permissions', checkPermission('manage_admins'), checkPermission('manage_admins'), (req, res) => {
         const sql = "SELECT p.id, p.permission_name FROM permissions p JOIN role_permissions rp ON p.id = rp.permission_id WHERE rp.role_id = ?";
         db.all(sql, [req.params.id], (err, rows) => {
             if (err) return res.status(500).json({ error: err.message });
             res.json(rows.map(r => r.id)); // 権限IDの配列を返す
         });
     });
-    app.post('/api/roles/:id/permissions',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
+    app.post('/api/roles/:id/permissions', checkPermission('manage_admins'), checkPermission('manage_admins'), (req, res) => {
         const roleId = req.params.id;
         const { permission_ids } = req.body; // [1, 3, 5] のようなIDの配列
         db.serialize(() => {
@@ -403,7 +413,7 @@ function createApp(db) {
         }
     });
     // --- 【更新】管理者(Admins) API ---
-    app.get('/api/admins',checkPermission('manage_admins'),  checkPermission('manage_admins'), (req, res) => {
+    app.get('/api/admins', checkPermission('manage_admins'), checkPermission('manage_admins'), (req, res) => {
         const sql = `
             SELECT a.id, a.username, GROUP_CONCAT(r.role_name, ', ') as roles
             FROM admins a
@@ -416,7 +426,7 @@ function createApp(db) {
             res.json(rows);
         });
     });
-    app.post('/api/admins',checkPermission('manage_admins'),  checkPermission('manage_admins'), async (req, res) => {
+    app.post('/api/admins', checkPermission('manage_admins'), checkPermission('manage_admins'), async (req, res) => {
         const { username, password, role_ids } = req.body;
         if (!username || !password || !role_ids || role_ids.length === 0) {
             return res.status(400).json({ error: "ユーザー名、パスワード、最低一つのロールは必須です。" });
@@ -424,7 +434,7 @@ function createApp(db) {
         try {
             const hash = await bcrypt.hash(password, 10);
             const adminSql = 'INSERT INTO admins (username, password_hash) VALUES (?, ?)';
-            db.run(adminSql, [username, hash], function(err) {
+            db.run(adminSql, [username, hash], function (err) {
                 if (err) return res.status(400).json({ error: "このユーザー名は既に使用されています。" });
                 const adminId = this.lastID;
                 const roleStmt = db.prepare("INSERT INTO admin_roles (admin_id, role_id) VALUES (?, ?)");
@@ -441,7 +451,7 @@ function createApp(db) {
 
 
     // --- ユーザー (users) CRUD API ---
-    app.get('/api/users',checkPermission('view_users'),  checkPermission('view_users'), (req, res) => {
+    app.get('/api/users', checkPermission('view_users'), checkPermission('view_users'), (req, res) => {
         const { name } = req.query;
         let sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id";
         const params = [];
@@ -460,23 +470,37 @@ function createApp(db) {
             res.json({ users: rows });
         });
     });
-    app.post('/api/users',checkPermission('manage_users'),  checkPermission('manage_users'), (req, res) => {
-        const { user_id, name, email, user_level, default_pc_id } = req.body;
+
+    app.post('/api/users', checkPermission('manage_users'), (req, res) => {
+        // ▼▼▼ default_slot_id を受け取る ▼▼▼
+        const { user_id, name, email, user_level, default_pc_id, default_slot_id } = req.body;
         if (!user_id || !name) return res.status(400).json({ error: "IDと名前は必須" });
-        const sql = 'INSERT INTO users (user_id, name, email, user_level, default_pc_id) VALUES (?, ?, ?, ?, ?)';
-        db.run(sql, [user_id, name, email, user_level, default_pc_id], (err) => {
-            if (err) return res.status(400).json({ error: "IDが重複" });
+
+        // ▼▼▼ SQLに default_slot_id を追加 ▼▼▼
+        const sql = 'INSERT INTO users (user_id, name, email, user_level, default_pc_id, default_slot_id) VALUES (?, ?, ?, ?, ?, ?)';
+        db.run(sql, [user_id, name, email, user_level, default_pc_id, default_slot_id], (err) => {
+            // ...エラーハンドリング...
             res.status(201).json({ user_id });
         });
     });
+
     app.put('/api/users/:id', checkPermission('manage_users'), (req, res) => {
-        const { name, email, user_level, default_pc_id } = req.body;
-        if (!name) return res.status(400).json({ error: "名前は必須" });
-        const sql = `UPDATE users SET name = ?, email = ?, user_level = ?, default_pc_id = ? WHERE user_id = ?`;
-        db.run(sql, [name, email, user_level, default_pc_id, req.params.id], function (err) {
+        const { name, email, user_level, default_pc_id, default_slot_id } = req.body;
+        if (!name) return res.status(400).json({ error: "名前は必須です。" });
+        const sql = `UPDATE users SET name = ?, email = ?, user_level = ?, default_pc_id = ?, default_slot_id = ? WHERE user_id = ?`;
+        db.run(sql, [name, email, user_level, default_pc_id, default_slot_id, req.params.id], function (err) {
             if (err) return res.status(500).json({ error: err.message });
-            if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません" });
+            if (this.changes === 0) return res.status(404).json({ error: "ユーザーが見つかりません。" });
             res.status(200).json({ message: "更新成功" });
+        });
+    });
+
+    app.get('/api/users/:id', checkPermission('view_users'), (req, res) => {
+        const sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
+        db.get(sql, [req.params.id], (err, row) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!row) return res.status(404).json({ error: "ユーザーが見つかりません。" });
+            res.json(row);
         });
     });
     app.delete('/api/users/:id', checkPermission('manage_users'), (req, res) => {
@@ -495,7 +519,18 @@ function createApp(db) {
         const { id } = req.params;
         const studentData = {};
 
-        const userSql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
+        // usersテーブルとpcs, class_slotsをJOINして、通常授業の情報も取得
+        const userSql = `
+            SELECT 
+                u.*, 
+                p.pc_name as default_pc_name,
+                cs.slot_name as default_slot_name,
+                cs.day_of_week as default_day_of_week
+            FROM users u 
+            LEFT JOIN pcs p ON u.default_pc_id = p.pc_id
+            LEFT JOIN class_slots cs ON u.default_slot_id = cs.slot_id
+            WHERE u.user_id = ?
+        `;
         const scheduleSql = "SELECT s.*, c.slot_name FROM schedules s JOIN class_slots c ON s.slot_id = c.slot_id WHERE s.user_id = ? ORDER BY s.class_date DESC";
         const logSql = "SELECT * FROM entry_logs WHERE user_id = ? AND log_type = 'entry' ORDER BY log_time DESC";
 
@@ -635,43 +670,28 @@ function createApp(db) {
     app.get('/api/export', checkPermission('perform_backup'), (req, res) => {
         const timestamp = new Date().toISOString().replace(/:/g, '-');
         const zipFileName = `backup-${timestamp}.zip`;
-
-        // ダウンロード用のヘッダーを設定
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename=${zipFileName}`);
 
-        const archive = archiver('zip', {
-            zlib: { level: 9 } // 圧縮レベルを最大に設定
-        });
-
-        // エラーハンドリング
-        archive.on('error', function (err) {
-            throw err;
-        });
-
-        // レスポンスにZIPストリームをパイプ
+        const archive = archiver('zip', { zlib: { level: 9 } });
+        archive.on('error', (err) => { throw err; });
         archive.pipe(res);
 
-        const tables = ['admins', 'pcs', 'users', 'class_slots', 'schedules', 'entry_logs'];
-        let completed = 0;
+        // ▼▼▼【修正】権限関連のテーブルをすべて含める▼▼▼
+        const tables = ['admins', 'roles', 'permissions', 'admin_roles', 'role_permissions', 'pcs', 'users', 'class_slots', 'schedules', 'entry_logs'];
 
-        // 各テーブルを非同期で処理
+        let completed = 0;
         tables.forEach(table => {
             db.all(`SELECT * FROM ${table}`, [], (err, rows) => {
                 if (err) {
                     console.error(`テーブル ${table} のエクスポートエラー:`, err);
-                    // エラーが発生しても処理を続行し、最終的にZIPを閉じる
                 } else if (rows.length > 0) {
-                    // JSONからCSVへの変換
                     const keys = Object.keys(rows[0]);
                     const header = keys.join(',') + '\n';
                     const csvRows = rows.map(row => {
                         return keys.map(key => {
                             let val = row[key];
-                            if (val === null || val === undefined) {
-                                return '';
-                            }
-                            // カンマやダブルクォートを含む場合はダブルクォートで囲む
+                            if (val === null || val === undefined) return '';
                             val = val.toString();
                             if (val.includes(',') || val.includes('"')) {
                                 return `"${val.replace(/"/g, '""')}"`;
@@ -679,38 +699,31 @@ function createApp(db) {
                             return val;
                         }).join(',');
                     }).join('\n');
-
-                    const csvData = header + csvRows;
-                    // CSVデータをファイルとしてZIPに追加
-                    archive.append(csvData, { name: `${table}.csv` });
+                    archive.append(header + csvRows, { name: `${table}.csv` });
+                } else {
+                    // データが0件のテーブルでも空のCSVファイルを作成する
+                    archive.append('', { name: `${table}.csv` });
                 }
-
                 completed++;
-                // 全てのテーブルの処理が終わったらZIPをファイナライズ
                 if (completed === tables.length) {
                     archive.finalize();
                 }
             });
         });
     });
+
     /**
-     * API: 全データのインポート (ZIP形式のCSVファイルから)
-     * POST /api/import
+     * API: 全データのインポート
      */
     app.post('/api/import', checkPermission('perform_backup'), upload.single('backupFile'), async (req, res) => {
         if (!req.file) {
             return res.status(400).json({ error: 'バックアップファイルがアップロードされていません。' });
         }
-
         const filePath = req.file.path;
-        const tablesInOrder = ['admins', 'pcs', 'users', 'class_slots', 'schedules', 'entry_logs'];
 
-        const run = (sql, params = []) => new Promise((resolve, reject) => {
-            db.run(sql, params, function (err) {
-                if (err) return reject(err);
-                resolve(this);
-            });
-        });
+        const tablesInOrder = ['admins', 'roles', 'permissions', 'admin_roles', 'role_permissions', 'pcs', 'class_slots', 'users', 'schedules', 'entry_logs'];
+
+        const run = (sql, params = []) => new Promise((resolve, reject) => db.run(sql, params, function (err) { if (err) return reject(err); resolve(this); }));
 
         try {
             const importData = {};
@@ -731,20 +744,12 @@ function createApp(db) {
             });
 
             await run("BEGIN TRANSACTION");
+            await run("PRAGMA foreign_keys = OFF;");
 
-            for (const table of [...tablesInOrder].reverse()) {
+            for (const table of tablesInOrder) {
                 await run(`DELETE FROM ${table}`);
             }
-
-            // sqlite_sequence テーブルが存在しない場合のエラーを握りつぶす
-            try {
-                await run("DELETE FROM sqlite_sequence");
-            } catch (e) {
-                // 「no such table」エラーは、テーブルがまだ存在しない正常なケースなので無視する
-                if (!e.message.includes('no such table: sqlite_sequence')) {
-                    throw e; // それ以外の予期せぬエラーは再スローしてトランザクションを失敗させる
-                }
-            }
+            try { await run("DELETE FROM sqlite_sequence"); } catch (e) { if (!e.message.includes('no such table: sqlite_sequence')) throw e; }
 
             for (const table of tablesInOrder) {
                 const records = importData[table];
@@ -756,32 +761,25 @@ function createApp(db) {
                     const stmt = db.prepare(sql);
                     for (const record of records) {
                         const values = keys.map(key => (record[key] === '' || record[key] === null || record[key] === undefined) ? null : record[key]);
-                        await new Promise((resolve, reject) => {
-                            stmt.run(values, err => {
-                                if (err) return reject(err);
-                                resolve();
-                            });
-                        });
+                        await new Promise((resolve, reject) => stmt.run(values, err => err ? reject(err) : resolve()));
                     }
-                    await new Promise((resolve, reject) => {
-                        stmt.finalize(err => {
-                            if (err) return reject(err);
-                            resolve();
-                        });
-                    });
+                    await new Promise((resolve, reject) => stmt.finalize(err => err ? reject(err) : resolve()));
                 }
             }
 
+            await run("PRAGMA foreign_keys = ON;");
             await run("COMMIT");
             res.json({ message: "データのインポートが正常に完了しました。" });
 
         } catch (error) {
             await run("ROLLBACK").catch(rbError => console.error("Rollback failed:", rbError));
+            await run("PRAGMA foreign_keys = ON;");
             res.status(500).json({ error: `インポート失敗: ${error.message}` });
         } finally {
             fs.unlinkSync(filePath);
         }
     });
+
     // --- スケジュール (schedules) API ---
 
     // 【強化版】スケジュールを取得（日付範囲、ステータスでの絞り込みに対応）
@@ -843,43 +841,77 @@ function createApp(db) {
 
     // スケジュールを一件登録 (振替用)
     app.post('/api/schedules', checkPermission('manage_schedules'), (req, res) => {
-        // ▼▼▼ notes を受け取る ▼▼▼
-        const { user_id, class_date, slot_id, status, assigned_pc_id, notes } = req.body;
+        const { user_id, class_date, slot_id, status, notes, original_class_date } = req.body;
         if (!user_id || !class_date || !slot_id || !status) return res.status(400).json({ error: "必須項目が不足しています。" });
-        // ▼▼▼ notes をSQLに追加 ▼▼▼
-        const sql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, assigned_pc_id, notes) VALUES (?, ?, ?, ?, ?, ?)';
-        db.run(sql, [user_id, class_date, slot_id, status, assigned_pc_id, notes], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ schedule_id: this.lastID });
+
+        db.serialize(() => {
+            db.run("BEGIN TRANSACTION");
+            const createSql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, notes) VALUES (?, ?, ?, ?, ?)';
+            db.run(createSql, [user_id, class_date, slot_id, status, notes], function (err) {
+                if (err) {
+                    db.run("ROLLBACK");
+                    return res.status(500).json({ error: "スケジュール作成に失敗: " + err.message });
+                }
+                const newScheduleId = this.lastID;
+                if (status === '振替' && original_class_date) {
+                    db.get("SELECT default_slot_id FROM users WHERE user_id = ?", [user_id], (err, user) => {
+                        if (err || !user || !user.default_slot_id) {
+                            db.run("ROLLBACK");
+                            return res.status(500).json({ error: "振替元の通常授業が見つかりません。" });
+                        }
+                        const absentSql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, notes) VALUES (?, ?, ?, ?, ?)';
+                        db.run(absentSql, [user_id, original_class_date, user.default_slot_id, '欠席', `${class_date}へ振替`], (err) => {
+                            if (err) {
+                                db.run("ROLLBACK");
+                                return res.status(500).json({ error: "欠席レコードの作成に失敗: " + err.message });
+                            }
+                            db.run("COMMIT", () => res.status(201).json({ schedule_id: newScheduleId }));
+                        });
+                    });
+                } else {
+                    db.run("COMMIT", () => res.status(201).json({ schedule_id: newScheduleId }));
+                }
+            });
         });
     });
 
+
     // スケジュールを一件更新
-    app.put('/api/schedules/:id', checkPermission('manage_schedules'), (req, res) => {
-        // ▼▼▼ notes を受け取る ▼▼▼
-        const { class_date, slot_id, status, assigned_pc_id, notes } = req.body;
-        if (!class_date || !slot_id || !status) return res.status(400).json({ error: "必須項目が不足しています。" });
-        // ▼▼▼ notes をSQLに追加 ▼▼▼
-        const sql = 'UPDATE schedules SET class_date = ?, slot_id = ?, status = ?, assigned_pc_id = ?, notes = ? WHERE schedule_id = ?';
-        db.run(sql, [class_date, slot_id, status, assigned_pc_id, notes, req.params.id], function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            if (this.changes === 0) return res.status(404).json({ error: "対象のスケジュールが見つかりません。" });
-            res.status(200).json({ message: "スケジュールを更新しました。" });
+    app.post('/api/schedules', checkPermission('manage_schedules'), (req, res) => {
+        const { user_id, class_date, slot_id, status, notes, original_class_date, assigned_pc_id } = req.body;
+        if (!user_id || !class_date || !slot_id || !status) return res.status(400).json({ error: "必須項目が不足しています。" });
+
+        db.serialize(() => {
+            db.run("BEGIN TRANSACTION");
+            const createSql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, notes, assigned_pc_id) VALUES (?, ?, ?, ?, ?, ?)';
+            db.run(createSql, [user_id, class_date, slot_id, status, notes, assigned_pc_id], function (err) {
+                if (err) {
+                    db.run("ROLLBACK");
+                    return res.status(500).json({ error: "スケジュール作成に失敗: " + err.message });
+                }
+                const newScheduleId = this.lastID;
+                if (status === '振替' && original_class_date) {
+                    db.get("SELECT default_slot_id FROM users WHERE user_id = ?", [user_id], (err, user) => {
+                        if (err || !user || !user.default_slot_id) {
+                            db.run("ROLLBACK");
+                            return res.status(500).json({ error: "振替元の通常授業が見つかりません。" });
+                        }
+                        const absentSql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, notes) VALUES (?, ?, ?, ?, ?)';
+                        db.run(absentSql, [user_id, original_class_date, user.default_slot_id, '欠席', `${class_date}へ振替`], (err) => {
+                            if (err) {
+                                db.run("ROLLBACK");
+                                return res.status(500).json({ error: "欠席レコードの作成に失敗: " + err.message });
+                            }
+                            db.run("COMMIT", () => res.status(201).json({ schedule_id: newScheduleId }));
+                        });
+                    });
+                } else {
+                    db.run("COMMIT", () => res.status(201).json({ schedule_id: newScheduleId }));
+                }
+            });
         });
     });
-    app.get('/api/users/:id', checkPermission('view_users'), (req, res) => {
-        const sql = "SELECT u.*, p.pc_name as default_pc_name FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.user_id = ?";
-        db.get(sql, [req.params.id], (err, row) => {
-            if (err) {
-                return res.status(500).json({ error: err.message });
-            }
-            if (!row) {
-                // ここで404エラーを返すことで、フロントエンドは「ユーザーが見つからない」と判断できる
-                return res.status(404).json({ error: "ユーザーが見つかりません。" });
-            }
-            res.json(row);
-        });
-    });
+
 
     // 【実装】スケジュールを一件削除
     app.delete('/api/schedules/:id', checkPermission('manage_schedules'), (req, res) => {
@@ -915,32 +947,170 @@ function createApp(db) {
             return res.status(400).json({ error: "日付が指定されていません。" });
         }
 
-        // JSTでの日付から曜日を計算
-        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
+        const dateParts = date.split('-').map(part => parseInt(part, 10));
+        const utcDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+        const dayOfWeek = utcDate.getUTCDay();
 
-        const sql = `
-        SELECT
-            s.schedule_id, s.status, s.notes,
-            u.user_id, u.name as user_name, u.user_level,
-            c.slot_id, c.slot_name, c.start_time, c.end_time, c.period, -- ▼▼▼ c.end_time を追加 ▼▼▼
-            p.pc_name,
-            (SELECT log_time FROM entry_logs 
-             WHERE user_id = s.user_id AND log_type = 'entry' AND date(log_time, '+9 hours') = ?
-             ORDER BY log_time DESC LIMIT 1) as entry_log_time
-        FROM class_slots c
-        LEFT JOIN schedules s ON c.slot_id = s.slot_id AND s.class_date = ?
-        LEFT JOIN users u ON s.user_id = u.user_id
-        LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
-        WHERE c.day_of_week = ?
-        ORDER BY c.period, u.name
-    `;
+        const rosterPromise = new Promise((resolve, reject) => {
+            // STEP 1: その日の差分スケジュールをすべて取得（欠席も含む）
+            const diffSql = `
+                SELECT s.schedule_id, s.user_id, s.class_date, s.slot_id, s.status, s.notes,
+                       u.name as user_name, u.user_level, 
+                       c.slot_name, c.start_time, c.end_time, c.period,
+                       p.pc_name
+                FROM schedules s
+                JOIN users u ON s.user_id = u.user_id
+                JOIN class_slots c ON s.slot_id = c.slot_id
+                LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
+                WHERE s.class_date = ?`;
+            db.all(diffSql, [date], (err, diffSchedules) => {
+                if (err) return reject(err);
 
-        // パラメータが3つあることに注意
-        db.all(sql, [date, date, dayOfWeek], (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json(rows.map(row => ({ ...row, is_present: !!row.entry_log_time })));
+                // 差分スケジュールがある生徒のIDをセットとして保持
+                const diffUserIds = new Set(diffSchedules.map(s => s.user_id));
+
+                // STEP 2: その曜日に通常授業が設定されている生徒を取得
+                const baseSql = `
+                    SELECT u.user_id, u.name as user_name, u.user_level, u.default_slot_id as slot_id,
+                           c.slot_name, c.start_time, c.end_time, c.period,
+                           p.pc_name, '通常' as status, NULL as notes, NULL as schedule_id
+                    FROM users u
+                    JOIN class_slots c ON u.default_slot_id = c.slot_id
+                    LEFT JOIN pcs p ON u.default_pc_id = p.pc_id
+                    WHERE c.day_of_week = ?`;
+                db.all(baseSql, [dayOfWeek], (err, baseStudents) => {
+                    if (err) return reject(err);
+
+                    // STEP 3: データを結合。差分がある生徒は差分を優先し、ない生徒は通常授業を追加
+                    let finalRoster = [...diffSchedules];
+                    baseStudents.forEach(student => {
+                        if (!diffUserIds.has(student.user_id)) {
+                            finalRoster.push(student);
+                        }
+                    });
+                    resolve(finalRoster);
+                });
+            });
+        });
+
+        rosterPromise.then(roster => {
+            if (roster.length === 0) return res.json([]);
+
+            const userIds = roster.map(r => `'${r.user_id}'`).join(',');
+            const logSql = `SELECT user_id, log_time FROM entry_logs WHERE user_id IN (${userIds}) AND log_type = 'entry' AND date(log_time, '+9 hours') = ?`;
+
+            db.all(logSql, [date], (err, logs) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const logMap = new Map(logs.map(log => [log.user_id, log.log_time]));
+                const result = roster.map(student => ({
+                    ...student,
+                    is_present: logMap.has(student.user_id)
+                })).sort((a, b) => a.period - b.period || a.user_name.localeCompare(b.user_name, 'ja'));
+
+                res.json(result);
+            });
+
+        }).catch(err => {
+            res.status(500).json({ error: "ロスター生成中にエラーが発生しました: " + err.message });
         });
     });
+    /**
+     * API: 特定の生徒の通常授業情報を取得
+     * GET /api/users/:id/default-schedule
+     */
+    app.get('/api/users/:id/default-schedule', checkPermission('view_schedules'), (req, res) => {
+        const { id } = req.params;
+        const { date } = req.query; // 日付を受け取る
+
+        if (!date) {
+            return res.status(400).json({ error: "日付が指定されていません。" });
+        }
+
+        const dateParts = date.split('-').map(part => parseInt(part, 10));
+        const utcDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+        const dayOfWeek = utcDate.getUTCDay();
+
+        const sql = `
+        SELECT u.user_id, u.default_slot_id, c.slot_name
+        FROM users u
+        JOIN class_slots c ON u.default_slot_id = c.slot_id
+        WHERE u.user_id = ? AND c.day_of_week = ?
+    `;
+
+        db.get(sql, [id, dayOfWeek], (err, row) => {
+            if (err) {
+                return res.status(500).json({ error: "データベースエラー: " + err.message });
+            }
+            // 該当する通常授業があれば返す。なければ空のオブジェクトを返す。
+            res.json(row || null);
+        });
+    });
+    app.get('/api/unaccounted', checkPermission('view_schedules'), (req, res) => {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ error: "日付が指定されていません。" });
+        }
+
+        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
+
+        const rosterPromise = new Promise((resolve, reject) => {
+            // STEP 1: 差分取得
+            const diffSql = `SELECT * FROM schedules WHERE class_date = ?`;
+            db.all(diffSql, [date], (err, diffSchedules) => {
+                if (err) return reject(err);
+
+                const absentUserIds = new Set(diffSchedules.filter(s => s.status === '欠席').map(s => s.user_id));
+                const makeupSchedules = diffSchedules.filter(s => s.status !== '欠席');
+                const makeupUserIds = new Set(makeupSchedules.map(s => s.user_id));
+
+                // STEP 2: ベース取得
+                const baseSql = `
+                SELECT u.user_id, u.name as user_name, c.slot_id, c.slot_name, c.period
+                FROM users u
+                JOIN class_slots c ON u.default_slot_id = c.slot_id
+                WHERE c.day_of_week = ?
+            `;
+                db.all(baseSql, [dayOfWeek], (err, baseStudents) => {
+                    if (err) return reject(err);
+
+                    // STEP 3: 結合
+                    let finalRoster = [];
+                    finalRoster.push(...makeupSchedules);
+                    baseStudents.forEach(student => {
+                        if (!absentUserIds.has(student.user_id) && !makeupUserIds.has(student.user_id)) {
+                            finalRoster.push(student);
+                        }
+                    });
+                    resolve(finalRoster);
+                });
+            });
+        });
+
+        rosterPromise.then(roster => {
+            // STEP 4: 出欠記録がない生徒をフィルタリング
+            if (roster.length === 0) {
+                return res.json([]);
+            }
+
+            const userIds = roster.map(r => `'${r.user_id}'`).join(',');
+            const logSql = `SELECT user_id FROM entry_logs WHERE user_id IN (${userIds}) AND log_type = 'entry' AND date(log_time, '+9 hours') = ?`;
+
+            db.all(logSql, [date], (err, logs) => {
+                if (err) return res.status(500).json({ error: err.message });
+
+                const loggedInUserIds = new Set(logs.map(l => l.user_id));
+
+                const unaccountedStudents = roster.filter(student => !loggedInUserIds.has(student.user_id));
+
+                res.json(unaccountedStudents);
+            });
+
+        }).catch(err => {
+            res.status(500).json({ error: "未処理者リストの生成中にエラーが発生しました: " + err.message });
+        });
+    });
+
     // --- 入退室ログ (entry_logs) API ---
 
     app.post('/api/entry_logs', checkPermission('manage_schedules'), (req, res) => {
@@ -956,41 +1126,33 @@ function createApp(db) {
      * API: ライブダッシュボードから生徒を「欠席」にする
      * POST /api/live/make-absent
      */
+
     app.post('/api/live/make-absent', checkPermission('manage_schedules'), (req, res) => {
-        const { user_id } = req.body;
-        if (!user_id) {
-            return res.status(400).json({ error: "user_idが指定されていません。" });
+        const { user_id, class_date, slot_id } = req.body;
+        if (!user_id || !class_date || !slot_id) {
+            return res.status(400).json({ error: "必要な情報が不足しています。" });
         }
 
-        // 現在のコマ情報を特定する
-        const now = new Date();
-        const jstNow = new Date(now.getTime() + (9 * 60 * 60 * 1000));
-        const dayOfWeek = jstNow.getUTCDay();
-        const currentTime = jstNow.getUTCHours().toString().padStart(2, '0') + ':' + jstNow.getUTCMinutes().toString().padStart(2, '0');
-        const todayDate = jstNow.toISOString().split('T')[0];
+        const findSql = `SELECT schedule_id FROM schedules WHERE user_id = ? AND class_date = ? AND slot_id = ?`;
+        db.get(findSql, [user_id, class_date, slot_id], (err, existingSchedule) => {
+            if (err) return res.status(500).json({ error: "データベース検索エラー: " + err.message });
 
-        const findSlotSql = `SELECT * FROM class_slots WHERE day_of_week = ? AND start_time <= ? AND end_time > ? ORDER BY start_time DESC LIMIT 1`;
-        db.get(findSlotSql, [dayOfWeek, currentTime, currentTime], (err, slot) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!slot) return res.status(404).json({ error: "現在、授業時間外です。" });
-
-            // 対象のスケジュールを特定してステータスを更新
-            const updateSql = `
-            UPDATE schedules 
-            SET status = '欠席' 
-            WHERE user_id = ? AND class_date = ? AND slot_id = ? AND status != '欠席'
-        `;
-            db.run(updateSql, [user_id, todayDate, slot.slot_id], function (err) {
-                if (err) {
-                    return res.status(500).json({ error: err.message });
-                }
-                if (this.changes === 0) {
-                    return res.status(404).json({ error: "対象のスケジュールが見つからないか、既に欠席としてマークされています。" });
-                }
-                res.status(200).json({ message: "ステータスを「欠席」に更新しました。" });
-            });
+            if (existingSchedule) {
+                const updateSql = `UPDATE schedules SET status = '欠席' WHERE schedule_id = ?`;
+                db.run(updateSql, [existingSchedule.schedule_id], function (err) {
+                    if (err) return res.status(500).json({ error: "既存スケジュールの更新に失敗: " + err.message });
+                    res.status(200).json({ message: "ステータスを「欠席」に更新しました。" });
+                });
+            } else {
+                const insertSql = `INSERT INTO schedules (user_id, class_date, slot_id, status, notes) VALUES (?, ?, ?, '欠席', '通常授業を欠席')`;
+                db.run(insertSql, [user_id, class_date, slot_id], function (err) {
+                    if (err) return res.status(500).json({ error: "欠席レコードの作成に失敗: " + err.message });
+                    res.status(201).json({ message: "欠席レコードを新規作成しました。" });
+                });
+            }
         });
     });
+
     /**
      * API: 今日の入室ログを削除する（出席取り消し用）
      * DELETE /api/entry_logs/today
@@ -1114,57 +1276,46 @@ function createApp(db) {
      * POST /api/schedules/bulk
      * 指定された生徒とコマで、未来のスケジュールを生成する
      */
-    app.post('/api/schedules/bulk', checkPermission('manage_schedules'), (req, res) => {
-        const { user_id, slot_id, pc_id, term_end_date } = req.body;
 
-        if (!user_id || !slot_id || !term_end_date) {
-            return res.status(400).json({ error: "必須項目が不足しています。" });
-        }
+    app.post('/api/schedules', checkPermission('manage_schedules'), (req, res) => {
+        // original_class_date: 振替元の日付
+        const { user_id, class_date, slot_id, status, notes, original_class_date } = req.body;
 
-        db.get('SELECT * FROM class_slots WHERE slot_id = ?', [slot_id], (err, slot) => {
-            if (err || !slot) return res.status(404).json({ error: "指定されたコマが見つかりません。" });
+        db.serialize(() => {
+            db.run("BEGIN TRANSACTION");
 
-            const schedulesToCreate = [];
-            let currentDate = new Date(); // 今日から開始
-            const endDate = new Date(term_end_date);
-            const targetDay = slot.day_of_week;
-
-            while (currentDate <= endDate) {
-                if (currentDate.getDay() === targetDay) {
-                    // ▼▼▼ この日付フォーマット部分を修正 ▼▼▼
-                    const year = currentDate.getFullYear();
-                    const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
-                    const day = currentDate.getDate().toString().padStart(2, '0');
-                    const dateString = `${year}-${month}-${day}`;
-                    // ▲▲▲ toISOString()の使用をやめ、ローカル日付を直接使用 ▲▲▲
-
-                    schedulesToCreate.push([user_id, dateString, slot_id, '通常', pc_id]);
+            // 1. 振替先のスケジュールを作成 ('振替')
+            const createSql = 'INSERT INTO schedules (user_id, class_date, slot_id, status, notes) VALUES (?, ?, ?, ?, ?)';
+            db.run(createSql, [user_id, class_date, slot_id, '振替', notes], function (err) {
+                if (err) {
+                    db.run("ROLLBACK");
+                    return res.status(500).json({ error: "振替スケジュールの作成に失敗: " + err.message });
                 }
-                currentDate.setDate(currentDate.getDate() + 1);
-            }
+                const newScheduleId = this.lastID;
 
-            if (schedulesToCreate.length === 0) {
-                return res.status(400).json({ error: "指定された期間に該当する授業日がありません。" });
-            }
+                // 2. original_class_dateが指定されていれば、元の授業を「欠席」にする差分レコードを作成
+                if (original_class_date) {
+                    // まず、その生徒の通常授業のコマIDを取得
+                    db.get("SELECT default_slot_id FROM users WHERE user_id = ?", [user_id], (err, user) => {
+                        if (err || !user || !user.default_slot_id) {
+                            db.run("ROLLBACK");
+                            return res.status(500).json({ error: "振替元の通常授業が見つかりません。" });
+                        }
 
-            db.serialize(() => {
-                db.run("BEGIN TRANSACTION");
-                try {
-                    db.run("DELETE FROM schedules WHERE user_id = ? AND status = '通常'", [user_id]);
-                    const stmt = db.prepare('INSERT INTO schedules (user_id, class_date, slot_id, status, assigned_pc_id) VALUES (?, ?, ?, ?, ?)');
-                    schedulesToCreate.forEach(schedule => {
-                        stmt.run(schedule);
-                    });
-                    stmt.finalize((err) => {
-                        if (err) throw err;
-                        db.run("COMMIT", (commitErr) => {
-                            if (commitErr) throw commitErr;
-                            res.status(201).json({ message: `${schedulesToCreate.length}件の通常授業スケジュールを登録しました。` });
+                        const absentSql = 'INSERT INTO schedules (user_id, class_date, slot_id, status) VALUES (?, ?, ?, ?)';
+                        db.run(absentSql, [user_id, original_class_date, user.default_slot_id, '欠席'], (err) => {
+                            if (err) {
+                                db.run("ROLLBACK");
+                                return res.status(500).json({ error: "欠席レコードの作成に失敗: " + err.message });
+                            }
+                            db.run("COMMIT");
+                            res.status(201).json({ schedule_id: newScheduleId });
                         });
                     });
-                } catch (e) {
-                    db.run("ROLLBACK");
-                    res.status(500).json({ error: `一括登録中にエラーが発生しました: ${e.message}` });
+                } else {
+                    // 振替元の指定がない場合（単純な追加など）
+                    db.run("COMMIT");
+                    res.status(201).json({ schedule_id: newScheduleId });
                 }
             });
         });

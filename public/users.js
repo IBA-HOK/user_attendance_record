@@ -1,42 +1,25 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- DOM要素の取得 ---
-    // 新規登録フォーム
     const userForm = document.getElementById('user-form');
     const pcSelect = document.getElementById('default-pc');
+    const slotSelect = document.getElementById('default-slot'); // 新規登録用コマ
     const messageArea = document.getElementById('message');
-
-    // ユーザー一覧テーブル
     const userListBody = document.getElementById('user-list-body');
-
-    // ユーザー編集用モーダル
     const editUserModal = document.getElementById('edit-user-modal');
     const editUserForm = document.getElementById('edit-user-form');
     const editPcSelect = document.getElementById('edit-default-pc');
+    const editSlotSelect = document.getElementById('edit-default-slot'); // 編集用コマ
     const editMessageArea = document.getElementById('edit-message');
     const closeEditModalBtn = editUserModal.querySelector('.close-btn');
     let currentEditingUserId = null;
 
-    // スケジュール設定用モーダル
-    const scheduleModal = document.getElementById('schedule-modal');
-    const scheduleForm = document.getElementById('schedule-form');
-    const scheduleModalTitle = document.getElementById('schedule-modal-title');
-    const scheduleSlotSelect = document.getElementById('schedule-slot-select');
-    const schedulePcSelect = document.getElementById('schedule-pc-select');
-    const scheduleMessageArea = document.getElementById('schedule-message');
-    const closeScheduleModalBtn = scheduleModal.querySelector('.close-btn');
-    let currentSchedulingUser = null;
-
     // --- 関数定義 ---
-
-    // セレクトボックスをデータで満たす汎用関数
     const populateSelect = async (url, selectElement, valueField, textFieldFn, defaultText) => {
         try {
             const response = await fetch(url);
             if (!response.ok) throw new Error('サーバーからのデータ取得に失敗');
-            const items = await response.json(); // APIの応答は生配列と仮定
-
+            const items = await response.json();
             selectElement.innerHTML = `<option value="">-- ${defaultText} --</option>`;
-
             if (items && Array.isArray(items)) {
                 items.forEach(item => {
                     const option = document.createElement('option');
@@ -50,55 +33,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // ユーザー一覧をフェッチしてテーブルを生成
     const fetchUsers = async () => {
         try {
             const response = await fetch('/api/users');
-            if (!response.ok) {
-                throw new Error('サーバーからの応答エラー');
-            }
-
-            // サーバーからの { "users": [...] } という応答を正しく受け取る
+            if (!response.ok) throw new Error('サーバーからの応答エラー');
             const data = await response.json();
-
-            userListBody.innerHTML = ''; // テーブルをクリア
-
-            // data.users が存在し、配列であることを確認してから処理する
+            userListBody.innerHTML = '';
             if (data.users && Array.isArray(data.users)) {
                 data.users.forEach(user => {
                     const tr = document.createElement('tr');
-                    // データ属性に全情報を格納する
-                    tr.dataset.userId = user.user_id;
-                    tr.dataset.name = user.name;
-                    tr.dataset.email = user.email || '';
-                    tr.dataset.userLevel = user.user_level || '通常';
-                    tr.dataset.defaultPcId = user.default_pc_id || '';
-
-                    // テーブルのセルを生成する
+                    tr.dataset.user = JSON.stringify(user);
                     tr.innerHTML = `
-                    <td><a href="/info/${user.user_id}">${user.user_id}</a></td>
-                    <td><a href="/info/${user.user_id}">${user.name}</a></td>
-                    <td>${user.user_level}</td>
-                    <td>${user.email || 'N/A'}</td>
-                    <td>${user.default_pc_name || 'N/A'}</td>
-                    <td class="actions">
-                        <button class="edit-btn">編集</button>
-                        <button class="schedule-btn">スケジュール</button>
-                        <button class="delete-btn">削除</button>
-                    </td>
-                `;
+                        <td><a href="/info/${user.user_id}">${user.user_id}</a></td>
+                        <td><a href="/info/${user.user_id}">${user.name}</a></td>
+                        <td>${user.user_level}</td>
+                        <td>${user.email || 'N/A'}</td>
+                        <td>${user.default_pc_name || 'N/A'}</td>
+                        <td>${user.default_slot_name || '未設定'}</td>
+                        <td class="actions">
+                            <button class="edit-btn">編集</button>
+                            <button class="delete-btn">削除</button>
+                        </td>
+                    `;
                     userListBody.appendChild(tr);
                 });
             }
         } catch (error) {
             console.error('ユーザー一覧の取得に失敗:', error.message);
-            userListBody.innerHTML = `<tr><td colspan="6" class="error">データ読み込みに失敗しました。</td></tr>`;
+            userListBody.innerHTML = `<tr><td colspan="7" class="error">データ読み込みに失敗しました。</td></tr>`;
         }
     };
 
     // --- イベントリスナー設定 ---
-
-    // 新規ユーザー登録フォーム
     userForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         messageArea.textContent = '';
@@ -108,11 +74,12 @@ document.addEventListener('DOMContentLoaded', () => {
             name: document.getElementById('name').value,
             email: document.getElementById('email').value,
             user_level: document.getElementById('user-level').value,
-            default_pc_id: pcSelect.value,
+            default_pc_id: pcSelect.value || null,
+            default_slot_id: slotSelect.value || null, // ▼▼▼【修正】値を取得
         };
         try {
             const response = await fetch('/api/users', {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formData),
+                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData),
             });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
@@ -126,41 +93,30 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ユーザー一覧のボタンクリック（イベント委任）
     userListBody.addEventListener('click', async (e) => {
         const target = e.target;
         const tr = target.closest('tr');
         if (!tr) return;
 
-        const userId = tr.dataset.userId;
+        const userData = JSON.parse(tr.dataset.user);
+        const userId = userData.user_id;
 
-        // 編集ボタンの処理
         if (target.classList.contains('edit-btn')) {
             currentEditingUserId = userId;
             document.getElementById('edit-user-id').textContent = userId;
-            document.getElementById('edit-name').value = tr.dataset.name;
-            document.getElementById('edit-email').value = tr.dataset.email;
-            document.getElementById('edit-user-level').value = tr.dataset.userLevel;
-            editPcSelect.value = tr.dataset.defaultPcId;
+            document.getElementById('edit-name').value = userData.name;
+            document.getElementById('edit-email').value = userData.email || '';
+            document.getElementById('edit-user-level').value = userData.user_level || '通常';
+            editPcSelect.value = userData.default_pc_id || '';
+            editSlotSelect.value = userData.default_slot_id || ''; // ▼▼▼【修正】値を設定
             editMessageArea.textContent = '';
             editUserModal.style.display = 'block';
         }
 
-        // スケジュール設定ボタンの処理
-        if (target.classList.contains('schedule-btn')) {
-            currentSchedulingUser = {id: userId, name: tr.dataset.name, pcId: tr.dataset.defaultPcId};
-            scheduleModalTitle.textContent = `${currentSchedulingUser.name} さんの通常授業を設定`;
-            scheduleMessageArea.textContent = '';
-            scheduleForm.reset();
-            schedulePcSelect.value = currentSchedulingUser.pcId;
-            scheduleModal.style.display = 'block';
-        }
-
-        // 削除ボタンの処理
         if (target.classList.contains('delete-btn')) {
             if (confirm(`ユーザーID: ${userId} を本当に削除しますか？`)) {
                 try {
-                    const response = await fetch(`/api/users/${userId}`, {method: 'DELETE'});
+                    const response = await fetch(`/api/users/${userId}`, { method: 'DELETE' });
                     if (!response.ok) throw new Error((await response.json()).error);
                     fetchUsers();
                 } catch (error) {
@@ -170,18 +126,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ユーザー編集モーダルのフォーム送信
     editUserForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const formData = {
             name: document.getElementById('edit-name').value,
             email: document.getElementById('edit-email').value,
             user_level: document.getElementById('edit-user-level').value,
-            default_pc_id: editPcSelect.value,
+            default_pc_id: editPcSelect.value || null,
+            default_slot_id: editSlotSelect.value || null, // ▼▼▼【修正】値を取得
         };
         try {
             const response = await fetch(`/api/users/${currentEditingUserId}`, {
-                method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formData)
+                method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData)
             });
             if (!response.ok) throw new Error((await response.json()).error);
             editUserModal.style.display = 'none';
@@ -192,40 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // スケジュール設定モーダルのフォーム送信
-    scheduleForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const formData = {
-            user_id: currentSchedulingUser.id,
-            slot_id: scheduleSlotSelect.value,
-            pc_id: schedulePcSelect.value || null,
-            term_end_date: document.getElementById('schedule-end-date').value,
-        };
-        if (!confirm(`${currentSchedulingUser.name}さんの通常授業を登録しますか？`)) return;
-        try {
-            const response = await fetch('/api/schedules/bulk', {
-                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formData)
-            });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error);
-            scheduleMessageArea.textContent = result.message;
-            scheduleMessageArea.classList.add('success');
-        } catch (error) {
-            scheduleMessageArea.textContent = `エラー: ${error.message}`;
-            scheduleMessageArea.classList.add('error');
-        }
-    });
-
-    // モーダルを閉じる処理
-    closeEditModalBtn.onclick = () => {
-        editUserModal.style.display = 'none';
-    };
-    closeScheduleModalBtn.onclick = () => {
-        scheduleModal.style.display = 'none';
-    };
+    closeEditModalBtn.onclick = () => { editUserModal.style.display = 'none'; };
     window.onclick = (e) => {
         if (e.target == editUserModal) editUserModal.style.display = 'none';
-        if (e.target == scheduleModal) scheduleModal.style.display = 'none';
     };
 
     // --- 初期化処理 ---
@@ -234,8 +159,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await Promise.all([
             populateSelect('/api/pcs', pcSelect, 'pc_id', pcTextFieldFn, 'PCを選択'),
             populateSelect('/api/pcs', editPcSelect, 'pc_id', pcTextFieldFn, 'PCを選択'),
-            populateSelect('/api/class_slots', scheduleSlotSelect, 'slot_id', 'slot_name', 'コマを選択'),
-            populateSelect('/api/pcs', schedulePcSelect, 'pc_id', pcTextFieldFn, '使用PCを選択')
+            populateSelect('/api/class_slots', slotSelect, 'slot_id', 'slot_name', '通常授業コマを選択 (任意)'), // ▼▼▼【追加】
+            populateSelect('/api/class_slots', editSlotSelect, 'slot_id', 'slot_name', 'コマを選択')
         ]);
         fetchUsers();
     };
