@@ -945,79 +945,89 @@ function createApp(db) {
     /**
      * API: 指定した日付の全スケジュール情報を取得（end_timeも完全に取得）
      */
-    app.get('/api/daily-roster', checkPermission('view_schedules'), (req, res) => {
+    app.get('/api/daily-roster', checkPermission('view_schedules'), async (req, res) => {
         const { date } = req.query;
         if (!date) {
             return res.status(400).json({ error: "日付が指定されていません。" });
         }
 
-        const dateParts = date.split('-').map(part => parseInt(part, 10));
-        const utcDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
-        const dayOfWeek = utcDate.getUTCDay();
+        try {
+            // 1. その日の曜日を確実に計算 (0=日曜, 1=月曜...)
+            const dateParts = date.split('-').map(part => parseInt(part, 10));
+            const utcDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+            const dayOfWeek = utcDate.getUTCDay();
 
-        const rosterPromise = new Promise((resolve, reject) => {
-            // STEP 1: その日の差分スケジュールをすべて取得（欠席も含む）
-            const diffSql = `
-                SELECT s.schedule_id, s.user_id, s.class_date, s.slot_id, s.status, s.notes,
-                       u.name as user_name, u.user_level, 
-                       c.slot_name, c.start_time, c.end_time, c.period,
-                       p.pc_name
-                FROM schedules s
-                JOIN users u ON s.user_id = u.user_id
-                JOIN class_slots c ON s.slot_id = c.slot_id
-                LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id
-                WHERE s.class_date = ?`;
-            db.all(diffSql, [date], (err, diffSchedules) => {
-                if (err) return reject(err);
+            // 2. その日に開催されるべき「すべての授業枠」を取得
+            const allSlotsForDay = await new Promise((resolve, reject) => {
+                db.all('SELECT * FROM class_slots WHERE day_of_week = ? ORDER BY period', [dayOfWeek], (err, rows) => err ? reject(err) : resolve(rows));
+            });
 
-                // 差分スケジュールがある生徒のIDをセットとして保持
-                const diffUserIds = new Set(diffSchedules.map(s => s.user_id));
+            if (allSlotsForDay.length === 0) {
+                return res.json([]); // その曜日に授業がなければ空を返す
+            }
 
-                // STEP 2: その曜日に通常授業が設定されている生徒を取得
-                const baseSql = `
-                    SELECT u.user_id, u.name as user_name, u.user_level, u.default_slot_id as slot_id,
-                           c.slot_name, c.start_time, c.end_time, c.period,
-                           p.pc_name, '通常' as status, NULL as notes, NULL as schedule_id
-                    FROM users u
-                    JOIN class_slots c ON u.default_slot_id = c.slot_id
-                    LEFT JOIN pcs p ON u.default_pc_id = p.pc_id
-                    WHERE c.day_of_week = ?`;
-                db.all(baseSql, [dayOfWeek], (err, baseStudents) => {
+            // 3. その日の「出席予定の生徒リスト」を動的に生成（既存のロジック）
+            const studentRoster = await new Promise((resolve, reject) => {
+                const diffSql = `SELECT s.*, u.name as user_name, u.user_level, p.pc_name FROM schedules s JOIN users u ON s.user_id = u.user_id LEFT JOIN pcs p ON s.assigned_pc_id = p.pc_id WHERE s.class_date = ?`;
+                db.all(diffSql, [date], (err, diffSchedules) => {
                     if (err) return reject(err);
+                    const diffUserIds = new Set(diffSchedules.map(s => s.user_id));
 
-                    // STEP 3: データを結合。差分がある生徒は差分を優先し、ない生徒は通常授業を追加
-                    let finalRoster = [...diffSchedules];
-                    baseStudents.forEach(student => {
-                        if (!diffUserIds.has(student.user_id)) {
-                            finalRoster.push(student);
-                        }
+                    const baseSql = `SELECT u.user_id, u.name as user_name, u.user_level, u.default_slot_id as slot_id, p.pc_name, '通常' as status, NULL as notes, NULL as schedule_id FROM users u LEFT JOIN pcs p ON u.default_pc_id = p.pc_id WHERE u.default_slot_id IS NOT NULL`;
+                    db.all(baseSql, [], (err, baseStudents) => {
+                        if (err) return reject(err);
+                        let finalRoster = [...diffSchedules];
+                        baseStudents.forEach(student => {
+                            if (!diffUserIds.has(student.user_id)) {
+                                finalRoster.push(student);
+                            }
+                        });
+                        resolve(finalRoster);
                     });
-                    resolve(finalRoster);
                 });
             });
-        });
 
-        rosterPromise.then(roster => {
-            if (roster.length === 0) return res.json([]);
-
-            const userIds = roster.map(r => `'${r.user_id}'`).join(',');
-            const logSql = `SELECT user_id, log_time FROM entry_logs WHERE user_id IN (${userIds}) AND log_type = 'entry' AND date(log_time, '+9 hours') = ?`;
-
-            db.all(logSql, [date], (err, logs) => {
-                if (err) return res.status(500).json({ error: err.message });
-
-                const logMap = new Map(logs.map(log => [log.user_id, log.log_time]));
-                const result = roster.map(student => ({
-                    ...student,
-                    is_present: logMap.has(student.user_id)
-                })).sort((a, b) => a.period - b.period || a.user_name.localeCompare(b.user_name, 'ja'));
-
-                res.json(result);
+            // 4. 「すべての授業枠」と「出席予定の生徒リスト」を結合
+            const finalApiResponse = [];
+            const rosterBySlot = new Map();
+            studentRoster.forEach(student => {
+                if (!rosterBySlot.has(student.slot_id)) rosterBySlot.set(student.slot_id, []);
+                rosterBySlot.get(student.slot_id).push(student);
             });
 
-        }).catch(err => {
-            res.status(500).json({ error: "ロスター生成中にエラーが発生しました: " + err.message });
-        });
+            allSlotsForDay.forEach(slot => {
+                const studentsInThisSlot = rosterBySlot.get(slot.slot_id);
+                if (studentsInThisSlot && studentsInThisSlot.length > 0) {
+                    studentsInThisSlot.forEach(student => {
+                        // 生徒情報とコマ情報をマージ
+                        finalApiResponse.push({ ...slot, ...student });
+                    });
+                } else {
+                    // 生徒がいない場合は、授業枠の情報だけを持つオブジェクトを追加
+                    finalApiResponse.push({ ...slot, user_id: null });
+                }
+            });
+
+            // 5. 出席記録を紐付け
+            const userIdsWithSchedules = finalApiResponse.filter(r => r.user_id).map(r => `'${r.user_id}'`).join(',');
+            if (userIdsWithSchedules.length === 0) {
+                return res.json(finalApiResponse); // 生徒が一人もいなくても授業枠は返す
+            }
+            const logs = await new Promise((resolve, reject) => {
+                const logSql = `SELECT user_id FROM entry_logs WHERE user_id IN (${userIdsWithSchedules}) AND log_type = 'entry' AND date(log_time, '+9 hours') = ?`;
+                db.all(logSql, [date], (err, rows) => err ? reject(err) : resolve(rows));
+            });
+            const loggedInUserIds = new Set(logs.map(l => l.user_id));
+            const resultWithAttendance = finalApiResponse.map(row => ({
+                ...row,
+                is_present: loggedInUserIds.has(row.user_id)
+            }));
+
+            res.json(resultWithAttendance);
+
+        } catch (error) {
+            res.status(500).json({ error: "ロスター生成中にエラーが発生しました: " + error.message });
+        }
     });
     /**
      * API: 特定の生徒の通常授業情報を取得
