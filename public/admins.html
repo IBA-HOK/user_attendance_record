@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
+    <link rel="icon" href="/favicon.ico">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>管理者設定</title>
@@ -14,71 +16,75 @@
             padding: 1rem;
             border-radius: 8px;
         }
+
         .roles-checkbox-group label {
             margin-right: 0.5rem;
         }
+
         .roles-checkbox-group div {
             display: flex;
             align-items: center;
         }
     </style>
 </head>
+
 <body>
-<div class="container">
-    <h1>管理者設定</h1>
-    <p><a href="/index.html">トップページへ</a></p>
+    <div class="container">
+        <h1>管理者設定</h1>
+        <p><a href="/index.html">トップページへ</a></p>
 
-    <div class="form-container">
-        <h2>新規管理者登録</h2>
-        <form id="admin-form">
-            <input type="text" id="username" placeholder="ユーザー名" required>
-            <input type="password" id="password" placeholder="パスワード" required>
-            <p><strong>ロールを選択 (複数可):</strong></p>
-            <div id="roles-checkbox-group" class="roles-checkbox-group">
-                <!-- ロールがここに動的に読み込まれる -->
-            </div>
-            <button type="submit" style="margin-top: 1rem;">登録する</button>
-        </form>
-        <p id="message" class="message"></p>
-    </div>
-
-    <div class="table-container">
-        <h2>管理者一覧</h2>
-        <table>
-            <thead>
-            <tr>
-                <th>ID</th>
-                <th>ユーザー名</th>
-                <th>割り当てられているロール</th>
-                <th>操作</th>
-            </tr>
-            </thead>
-            <tbody id="admin-list-body">
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- ▼▼▼【新規】ロール編集用モーダルを追加 ▼▼▼ -->
-<div id="edit-admin-modal" class="modal">
-    <div class="modal-content">
-        <span class="close-btn">&times;</span>
-        <h2>管理者ロール編集</h2>
-        <form id="edit-admin-form">
-            <p><strong>管理者:</strong> <span id="edit-admin-name"></span></p>
-            <div class="form-group">
+        <div class="form-container">
+            <h2>新規管理者登録</h2>
+            <form id="admin-form">
+                <input type="text" id="username" placeholder="ユーザー名" required>
+                <input type="password" id="password" placeholder="パスワード" required>
                 <p><strong>ロールを選択 (複数可):</strong></p>
-                <div id="edit-roles-checkbox-group" class="roles-checkbox-group">
-                    <!-- 編集用のロールがここに動的に読み込まれる -->
+                <div id="roles-checkbox-group" class="roles-checkbox-group">
+                    <!-- ロールがここに動的に読み込まれる -->
                 </div>
-            </div>
-            <button type="submit" style="margin-top: 1rem;">保存</button>
-        </form>
-        <p id="edit-message" class="message"></p>
+                <button type="submit" style="margin-top: 1rem;">登録する</button>
+            </form>
+            <p id="message" class="message"></p>
+        </div>
+
+        <div class="table-container">
+            <h2>管理者一覧</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>ユーザー名</th>
+                        <th>割り当てられているロール</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="admin-list-body">
+                </tbody>
+            </table>
+        </div>
     </div>
-</div>
+
+    <!-- ▼▼▼【新規】ロール編集用モーダルを追加 ▼▼▼ -->
+    <div id="edit-admin-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>管理者ロール編集</h2>
+            <form id="edit-admin-form">
+                <p><strong>管理者:</strong> <span id="edit-admin-name"></span></p>
+                <div class="form-group">
+                    <p><strong>ロールを選択 (複数可):</strong></p>
+                    <div id="edit-roles-checkbox-group" class="roles-checkbox-group">
+                        <!-- 編集用のロールがここに動的に読み込まれる -->
+                    </div>
+                </div>
+                <button type="submit" style="margin-top: 1rem;">保存</button>
+            </form>
+            <p id="edit-message" class="message"></p>
+        </div>
+    </div>
 
 
-<script src="admins.js"></script>
+    <script src="admins.js"></script>
 </body>
+
 </html>

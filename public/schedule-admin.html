@@ -1,37 +1,40 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
+    <link rel="icon" href="/favicon.ico">
     <meta charset="UTF-8">
     <title>全スケジュール管理</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-<div class="container">
-    <h1>全スケジュール管理</h1>
-    <p><a href="/index.html">トップページへ</a></p>
+    <div class="container">
+        <h1>全スケジュール管理</h1>
+        <p><a href="/index.html">トップページへ</a></p>
 
-    <div class="form-container">
-               <div class="actions-header">
-            <button id="add-schedule-btn">＋ 新規授業予定を追加</button>
+        <div class="form-container">
+            <div class="actions-header">
+                <button id="add-schedule-btn">＋ 新規授業予定を追加</button>
+            </div>
+
+            <h2>表示フィルタ</h2>
+            <form id="filter-form">
+                <input type="date" id="start-date" title="開始日">
+                <span>〜</span>
+                <input type="date" id="end-date" title="終了日">
+
+                <input type="text" id="name-filter" placeholder="生徒名で検索">
+
+                <select id="status-filter">
+                    <option value="">全ステータス</option>
+                    <option value="通常">通常</option>
+                    <option value="振替">振替</option>
+                    <option value="欠席">欠席</option>
+                </select>
+                <button type="submit">表示</button>
+            </form>
         </div>
-
-        <h2>表示フィルタ</h2>
-        <form id="filter-form">
-            <input type="date" id="start-date" title="開始日">
-            <span>〜</span>
-            <input type="date" id="end-date" title="終了日">
-
-            <input type="text" id="name-filter" placeholder="生徒名で検索">
-
-            <select id="status-filter">
-                <option value="">全ステータス</option>
-                <option value="通常">通常</option>
-                <option value="振替">振替</option>
-                <option value="欠席">欠席</option>
-            </select>
-            <button type="submit">表示</button>
-        </form>
-    </div>
 
 
         <div class="table-container">
@@ -43,15 +46,16 @@
                         <th>コマ</th>
                         <th>生徒名</th>
                         <th>ステータス</th>
-                        <th>備考</th> <th>操作</th>
+                        <th>備考</th>
+                        <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="schedule-list-body"></tbody>
             </table>
         </div>
     </div>
-    
-    
+
+
     <div id="add-schedule-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn">&times;</span>
@@ -67,50 +71,58 @@
                     <p id="selected-student-info" style="font-weight: bold;"></p>
                 </div>
                 <hr>
-                <div class="form-group"><label for="add-class-date">日付:</label><input type="date" id="add-class-date" required></div>
-                <div class="form-group"><label for="add-slot-select">コマ:</label><select id="add-slot-select" required></select></div>
-                <div class="form-group"><label for="add-status-select">ステータス:</label><select id="add-status-select" required><option value="通常">通常</option><option value="振替">振替</option></select></div>
-                <div class="form-group"><label for="add-notes">備考:</label><textarea id="add-notes" rows="3"></textarea></div>
+                <div class="form-group"><label for="add-class-date">日付:</label><input type="date" id="add-class-date"
+                        required></div>
+                <div class="form-group"><label for="add-slot-select">コマ:</label><select id="add-slot-select"
+                        required></select></div>
+                <div class="form-group"><label for="add-status-select">ステータス:</label><select id="add-status-select"
+                        required>
+                        <option value="通常">通常</option>
+                        <option value="振替">振替</option>
+                    </select></div>
+                <div class="form-group"><label for="add-notes">備考:</label><textarea id="add-notes" rows="3"></textarea>
+                </div>
                 <button type="submit">この内容で追加</button>
             </form>
             <p id="add-message" class="message"></p>
         </div>
     </div>
-<div id="edit-schedule-modal" class="modal">
-    <div class="modal-content">
-        <span class="close-btn">&times;</span>
-        <h2>スケジュール編集</h2>
-        <form id="edit-schedule-form">
-            <p><strong>生徒:</strong> <span id="edit-student-name"></span></p>
-            <div class="form-group">
-                <label for="edit-class-date">日付:</label>
-                <input type="date" id="edit-class-date" required>
-            </div>
-            <div class="form-group">
-                <label for="edit-slot-select">コマ:</label>
-                <select id="edit-slot-select" required></select>
-            </div>
-            <div class="form-group">
-                <label for="edit-status-select">ステータス:</label>
-                <select id="edit-status-select" required>
-                    <option value="通常">通常</option>
-                    <option value="振替">振替</option>
-                    <option value="欠席">欠席</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="edit-pc-select">割当PC:</label>
-                <select id="edit-pc-select"></select>
-            </div>
-            <div class="form-group">
-                <label for="edit-notes">備考:</label>
-                <textarea id="edit-notes" rows="3"></textarea>
-            </div>
-            <button type="submit">保存</button>
-        </form>
-        <p id="edit-message" class="message"></p>
+    <div id="edit-schedule-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>スケジュール編集</h2>
+            <form id="edit-schedule-form">
+                <p><strong>生徒:</strong> <span id="edit-student-name"></span></p>
+                <div class="form-group">
+                    <label for="edit-class-date">日付:</label>
+                    <input type="date" id="edit-class-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit-slot-select">コマ:</label>
+                    <select id="edit-slot-select" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-status-select">ステータス:</label>
+                    <select id="edit-status-select" required>
+                        <option value="通常">通常</option>
+                        <option value="振替">振替</option>
+                        <option value="欠席">欠席</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-pc-select">割当PC:</label>
+                    <select id="edit-pc-select"></select>
+                </div>
+                <div class="form-group">
+                    <label for="edit-notes">備考:</label>
+                    <textarea id="edit-notes" rows="3"></textarea>
+                </div>
+                <button type="submit">保存</button>
+            </form>
+            <p id="edit-message" class="message"></p>
+        </div>
     </div>
-</div>
-<script src="schedule-admin.js"></script>
+    <script src="schedule-admin.js"></script>
 </body>
+
 </html>

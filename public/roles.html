@@ -1,49 +1,86 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
+    <link rel="icon" href="/favicon.ico">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ロール・権限設定</title>
     <link rel="stylesheet" href="styles.css">
     <style>
-        .roles-permissions-container { display: flex; gap: 2rem; }
-        .roles-list { width: 30%; }
-        .permissions-list { width: 70%; }
-        .roles-list ul { list-style: none; padding: 0; }
-        .roles-list li { padding: 0.5rem; border: 1px solid #ccc; margin-bottom: 0.5rem; cursor: pointer; border-radius: 4px;}
-        .roles-list li.selected { background-color: #007bff; color: white; }
-        .permissions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
-        .permission-item { display: flex; align-items: center; }
+        .roles-permissions-container {
+            display: flex;
+            gap: 2rem;
+        }
+
+        .roles-list {
+            width: 30%;
+        }
+
+        .permissions-list {
+            width: 70%;
+        }
+
+        .roles-list ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .roles-list li {
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .roles-list li.selected {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .permissions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .permission-item {
+            display: flex;
+            align-items: center;
+        }
     </style>
 </head>
+
 <body>
-<div class="container">
-    <h1>ロール・権限設定</h1>
-    <p><a href="/index.html">トップページへ</a></p>
+    <div class="container">
+        <h1>ロール・権限設定</h1>
+        <p><a href="/index.html">トップページへ</a></p>
 
-    <div class="form-container">
-        <h2>新規ロール作成</h2>
-        <form id="role-form">
-            <input type="text" id="role-name" placeholder="新しいロール名" required>
-            <button type="submit">作成</button>
-        </form>
-    </div>
-
-    <div class="roles-permissions-container">
-        <div class="roles-list">
-            <h2>ロール一覧</h2>
-            <ul id="roles-list-ul"></ul>
-        </div>
-        <div class="permissions-list">
-            <h2 id="permissions-title">権限を選択</h2>
-            <form id="permissions-form">
-                <div id="permissions-grid" class="permissions-grid"></div>
-                <button type="submit" style="margin-top: 1rem;">権限を保存</button>
+        <div class="form-container">
+            <h2>新規ロール作成</h2>
+            <form id="role-form">
+                <input type="text" id="role-name" placeholder="新しいロール名" required>
+                <button type="submit">作成</button>
             </form>
         </div>
+
+        <div class="roles-permissions-container">
+            <div class="roles-list">
+                <h2>ロール一覧</h2>
+                <ul id="roles-list-ul"></ul>
+            </div>
+            <div class="permissions-list">
+                <h2 id="permissions-title">権限を選択</h2>
+                <form id="permissions-form">
+                    <div id="permissions-grid" class="permissions-grid"></div>
+                    <button type="submit" style="margin-top: 1rem;">権限を保存</button>
+                </form>
+            </div>
+        </div>
+        <p id="message" class="message"></p>
     </div>
-    <p id="message" class="message"></p>
-</div>
-<script src="roles.js"></script>
+    <script src="roles.js"></script>
 </body>
+
 </html>

@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
+    <link rel="icon" href="/favicon.ico">
     <meta charset="UTF-8">
     <title>総合管理システム</title>
     <link rel="stylesheet" href="styles.css">
@@ -12,21 +14,25 @@
             align-items: center;
             margin-bottom: 20px;
         }
+
         .portal-header h1 {
             margin: 0;
             border-bottom: none;
         }
+
         #logout-btn {
             padding: 8px 16px;
             font-size: 14px;
             background-color: #6c757d;
         }
+
         .portal-menu {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
             gap: 20px;
             text-align: center;
         }
+
         .portal-card {
             display: block;
             padding: 30px 20px;
@@ -39,46 +45,84 @@
             /* ▼▼▼【修正点】初期状態では非表示にする ▼▼▼ */
             display: none;
         }
+
         .portal-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
             text-decoration: none;
         }
+
         .portal-card h2 {
             margin-top: 0;
             color: #1877f2;
             border-bottom: none;
             padding-bottom: 0;
         }
+
         .portal-card p {
             font-size: 14px;
             color: #606770;
         }
     </style>
 </head>
+
 <body>
-<div class="container">
-    <div class="portal-header">
-        <h1>管理システム</h1>
-        <button id="logout-btn">ログアウト</button>
+    <div class="container">
+        <div class="portal-header">
+            <h1>管理システム</h1>
+            <button id="logout-btn">ログアウト</button>
+        </div>
+
+        <!-- ▼▼▼【修正点】各リンクに data-permission 属性を追加 ▼▼▼ -->
+        <div class="portal-menu">
+            <a href="/live-dashboard.html" class="portal-card" data-permission="view_schedules">
+                <h2>ライブ出席状況</h2>
+                <p>現在進行中の授業の出席状況をリアルタイムで確認する。</p>
+            </a>
+            <a href="/schedule-admin.html" class="portal-card" data-permission="view_schedules">
+                <h2>全スケジュール管理</h2>
+                <p>全生徒のスケジュールを検索、編集、削除する。</p>
+            </a>
+            <a href="/schedule.html" class="portal-card" data-permission="manage_schedules">
+                <h2>振替登録</h2>
+                <p>生徒の授業の振替を登録する。</p>
+            </a>
+            <a href="/users.html" class="portal-card" data-permission="view_users">
+                <h2>ユーザー管理</h2>
+                <p>生徒の登録、編集、削除、通常スケジュールの設定を行う。</p>
+            </a>
+            <a href="/class-slots.html" class="portal-card" data-permission="view_masters">
+                <h2>授業コマ管理</h2>
+                <p>授業のコマ（時間割）を登録、管理する。</p>
+            </a>
+            <a href="/pcs.html" class="portal-card" data-permission="view_masters">
+                <h2>PC管理</h2>
+                <p>塾のPC資産を登録、管理する。</p>
+            </a>
+            <a href="/bulk-schedule.html" class="portal-card" data-permission="manage_schedules">
+                <h2>通常授業の一括設定</h2>
+                <p>特定の生徒の通常授業を未来の日付まで一括で生成する。</p>
+            </a>
+            <a href="/backup.html" class="portal-card" data-permission="perform_backup">
+                <h2>バックアップ</h2>
+                <p>バックアップデータをエクスポート、インポートする。</p>
+            </a>
+            <a href="/batch-process.html" class="portal-card" data-permission="view_schedules">
+                <h2>未出席生徒</h2>
+                <p>今日の未出席分を一覧で確認</p>
+            </a>
+            <a href="/admins.html" class="portal-card" data-permission="manage_admins">
+                <h2>管理者設定</h2>
+                <p>システムの管理ユーザーを追加・編集します。</p>
+            </a>
+            <a href="/roles.html" class="portal-card" data-permission="manage_admins">
+                <h2>ロール・権限設定</h2>
+                <p>ロールを作成し、各ロールに操作権限を割り当てます。</p>
+            </a>
+        </div>
     </div>
 
-    <!-- ▼▼▼【修正点】各リンクに data-permission 属性を追加 ▼▼▼ -->
-    <div class="portal-menu">
-        <a href="/live-dashboard.html" class="portal-card" data-permission="view_schedules"><h2>ライブ出席状況</h2><p>現在進行中の授業の出席状況をリアルタイムで確認する。</p></a>
-        <a href="/schedule-admin.html" class="portal-card" data-permission="view_schedules"><h2>全スケジュール管理</h2><p>全生徒のスケジュールを検索、編集、削除する。</p></a>
-        <a href="/schedule.html" class="portal-card" data-permission="manage_schedules"><h2>振替登録</h2><p>生徒の授業の振替を登録する。</p></a>
-        <a href="/users.html" class="portal-card" data-permission="view_users"><h2>ユーザー管理</h2><p>生徒の登録、編集、削除、通常スケジュールの設定を行う。</p></a>
-        <a href="/class-slots.html" class="portal-card" data-permission="view_masters"><h2>授業コマ管理</h2><p>授業のコマ（時間割）を登録、管理する。</p></a>
-        <a href="/pcs.html" class="portal-card" data-permission="view_masters"><h2>PC管理</h2><p>塾のPC資産を登録、管理する。</p></a>
-        <a href="/bulk-schedule.html" class="portal-card" data-permission="manage_schedules"><h2>通常授業の一括設定</h2><p>特定の生徒の通常授業を未来の日付まで一括で生成する。</p></a>
-        <a href="/backup.html" class="portal-card" data-permission="perform_backup"><h2>バックアップ</h2><p>バックアップデータをエクスポート、インポートする。</p></a>
-        <a href="/batch-process.html" class="portal-card" data-permission="view_schedules"><h2>未出席生徒</h2><p>今日の未出席分を一覧で確認</p></a>
-        <a href="/admins.html" class="portal-card" data-permission="manage_admins"><h2>管理者設定</h2><p>システムの管理ユーザーを追加・編集します。</p></a>
-        <a href="/roles.html" class="portal-card" data-permission="manage_admins"><h2>ロール・権限設定</h2><p>ロールを作成し、各ロールに操作権限を割り当てます。</p></a>
-    </div>
-</div>
-
-<script src="index.js"></script>
+    <script src="index.js"></script>
 </body>
+
 </html>

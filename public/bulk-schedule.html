@@ -1,44 +1,48 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
+    <link rel="icon" href="/favicon.ico">
     <meta charset="UTF-8">
     <title>通常授業一括設定</title>
     <link rel="stylesheet" href="styles.css">
 </head>
+
 <body>
-<div class="container">
-    <h1>通常授業 一括設定</h1>
-    <p><a href="/index.html">トップページへ</a></p>
+    <div class="container">
+        <h1>通常授業 一括設定</h1>
+        <p><a href="/index.html">トップページへ</a></p>
 
-    <div class="form-container">
-        <h2>設定対象</h2>
-        <form id="bulk-form">
-            <div class="form-group">
-                <label for="user-select">生徒を選択:</label>
-                <select id="user-select" required></select>
-            </div>
+        <div class="form-container">
+            <h2>設定対象</h2>
+            <form id="bulk-form">
+                <div class="form-group">
+                    <label for="user-select">生徒を選択:</label>
+                    <select id="user-select" required></select>
+                </div>
 
-            <div class="form-group">
-                <label for="slot-select">通常授業のコマを選択:</label>
-                <select id="slot-select" required></select>
-            </div>
+                <div class="form-group">
+                    <label for="slot-select">通常授業のコマを選択:</label>
+                    <select id="slot-select" required></select>
+                </div>
 
-            <div class="form-group">
-                <label for="pc-select">使用PCを選択:</label>
-                <select id="pc-select"></select>
-            </div>
+                <div class="form-group">
+                    <label for="pc-select">使用PCを選択:</label>
+                    <select id="pc-select"></select>
+                </div>
 
-            <div class="form-group">
-                <label for="term-end-date">いつまで登録しますか？ (学期末など):</label>
-                <input type="date" id="term-end-date" required>
-            </div>
+                <div class="form-group">
+                    <label for="term-end-date">いつまで登録しますか？ (学期末など):</label>
+                    <input type="date" id="term-end-date" required>
+                </div>
 
-            <button type="submit">スケジュールを一括登録</button>
-        </form>
-        <p id="message" class="message"></p>
+                <button type="submit">スケジュールを一括登録</button>
+            </form>
+            <p id="message" class="message"></p>
+        </div>
     </div>
-</div>
 
-<script src="bulk-schedule.js"></script>
+    <script src="bulk-schedule.js"></script>
 </body>
+
 </html>
