@@ -1,128 +1,91 @@
-const fs = require('fs');
-const path = require('path');
-const readline = require('readline');
+// create-admin.js
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const db = new sqlite3.Database('./management.db');
 
-// --- 設定 ---
-const serverJsPath = path.join(__dirname, 'server.js');
-const backupPath = path.join(__dirname, 'server.js.bak');
+// --- ▼▼▼ 設定せよ ▼▼▼ ---
+const adminUsername = 'admin';
+const adminPassword = 'password123'; // ここに設定したい初期パスワードを入力
+// --------------------------
 
-// --- APIルートと権限のマッピング ---
-const permissionMap = {
-    // Admins & Roles
-    'GET /api/permissions': 'manage_admins',
-    'GET /api/roles': 'manage_admins',
-    'POST /api/roles': 'manage_admins',
-    'GET /api/roles/:id/permissions': 'manage_admins',
-    'POST /api/roles/:id/permissions': 'manage_admins',
-    'GET /api/admins': 'manage_admins',
-    'POST /api/admins': 'manage_admins',
-    // Users
-    'GET /api/users': 'view_users',
-    'POST /api/users': 'manage_users',
-    'PUT /api/users/:id': 'manage_users',
-    'DELETE /api/users/:id': 'manage_users',
-    'GET /api/student-info/:id': 'view_users',
-    'GET /api/users/:id': 'view_users',
-    // PCs & Class Slots
-    'GET /api/pcs': 'view_masters',
-    'POST /api/pcs': 'manage_masters',
-    'PUT /api/pcs/:id': 'manage_masters',
-    'DELETE /api/pcs/:id': 'manage_masters',
-    'GET /api/class_slots': 'view_masters',
-    'POST /api/class_slots': 'manage_masters',
-    'PUT /api/class_slots/:id': 'manage_masters',
-    'DELETE /api/class_slots/:id': 'manage_masters',
-    // Schedules & Logs
-    'GET /api/schedules': 'view_schedules',
-    'POST /api/schedules': 'manage_schedules',
-    'PUT /api/schedules/:id': 'manage_schedules',
-    'DELETE /api/schedules/:id': 'manage_schedules',
-    'PUT /api/schedules/:id/status': 'manage_schedules',
-    'POST /api/schedules/bulk': 'manage_schedules',
-    'POST /api/entry_logs': 'manage_schedules',
-    'DELETE /api/entry_logs/today': 'manage_schedules',
-    // Dashboard/Utility
-    'GET /api/daily-roster': 'view_schedules',
-    'POST /api/live/make-absent': 'manage_schedules',
-    'GET /api/live/current-class': 'view_schedules',
-    'GET /api/unaccounted': 'view_schedules',
-    // Backup/Import
-    'GET /api/export': 'perform_backup',
-    'POST /api/import': 'perform_backup'
-};
+const saltRounds = 10;
 
-// --- メイン処理 ---
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
+console.log(`初期管理者 '${adminUsername}' を作成し、全権限を持つ 'superadmin' ロールを割り当てます...`);
+
+bcrypt.hash(adminPassword, saltRounds, (err, hash) => {
+    if (err) {
+        console.error("パスワードのハッシュ化エラー:", err);
+        db.close();
+        return;
+    }
+
+    db.serialize(() => {
+        // --- 1. 必要なテーブルがなければ作成 ---
+        // このスクリプトがサーバー初回起動より先に実行される場合を想定
+        db.run(`CREATE TABLE IF NOT EXISTS admins (
+            id INTEGER PRIMARY KEY,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL
+        )`);
+        db.run(`CREATE TABLE IF NOT EXISTS roles (
+            id INTEGER PRIMARY KEY,
+            role_name TEXT UNIQUE NOT NULL
+        )`);
+        db.run(`CREATE TABLE IF NOT EXISTS admin_roles (
+            admin_id INTEGER NOT NULL,
+            role_id INTEGER NOT NULL,
+            FOREIGN KEY(admin_id) REFERENCES admins(id) ON DELETE CASCADE,
+            FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE CASCADE,
+            PRIMARY KEY (admin_id, role_id)
+        )`);
+
+        // --- 2. 'superadmin' ロールがなければ作成 ---
+        db.run("INSERT OR IGNORE INTO roles (role_name) VALUES ('superadmin')");
+
+        // --- 3. 管理者ユーザーを作成 ---
+        const adminSql = 'INSERT INTO admins (username, password_hash) VALUES (?, ?)';
+        db.run(adminSql, [adminUsername, hash], function (err) {
+            if (err) {
+                if (err.message.includes('UNIQUE constraint failed')) {
+                    console.log(`管理者 '${adminUsername}' は既に存在します。`);
+                    // 既存ユーザーにsuperadminロールを割り当てる試み
+                    assignSuperadminRole(adminUsername, () => db.close());
+                } else {
+                    console.error("管理者作成エラー:", err.message);
+                    db.close();
+                }
+                return;
+            }
+
+            const adminId = this.lastID;
+            console.log(`管理者 '${adminUsername}' (ID: ${adminId}) を作成しました。`);
+
+            // --- 4. 作成した管理者に 'superadmin' ロールを割り当て ---
+            assignSuperadminRole(adminUsername, () => db.close());
+        });
+    });
 });
 
-const main = async () => {
-    console.log('=================================================================');
-    console.log('server.js のAPIエンドポイントに権限チェックを自動で追加します。');
-    console.log('=================================================================');
-    console.log(`\n対象ファイル: ${serverJsPath}\n`);
-
-    if (!fs.existsSync(serverJsPath)) {
-        console.error(`\nエラー: server.js が見つかりません。`);
-        rl.close();
-        return;
-    }
-
-    const answer = await new Promise(resolve => {
-        rl.question('よろしいですか？ (y/N) ', resolve);
-    });
-
-    if (answer.toLowerCase() !== 'y') {
-        console.log('キャンセルしました。');
-        rl.close();
-        return;
-    }
-
-    try {
-        console.log(`\nバックアップを作成しています: ${backupPath}`);
-        fs.copyFileSync(serverJsPath, backupPath);
-
-        console.log('権限チェックの挿入を開始します...');
-        let content = fs.readFileSync(serverJsPath, 'utf-8');
-        let changes = 0;
-
-        for (const [routeKey, permission] of Object.entries(permissionMap)) {
-            const [method, route] = routeKey.split(' ');
-            const lowerMethod = method.toLowerCase();
-
-            // 正規表現用にルートのパスをエスケープ
-            const escapedRoute = route.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
-
-            // 検索する正規表現パターン
-            // 例: app.get('/api/users', (req, res) => {
-            // checkPermissionがまだ挿入されていない行を対象とする
-            const pattern = new RegExp(`(app\\.${lowerMethod}\\s*\\(\\s*['\`"]${escapedRoute}['\`"]\\s*,\\s*)(?!checkPermission\\()`, 'g');
-
-            // 置換後の文字列
-            const replacement = `$1checkPermission('${permission}'), `;
-
-            const newContent = content.replace(pattern, replacement);
-
-            if (content !== newContent) {
-                content = newContent;
-                console.log(`  \x1b[32m[OK]\x1b[0m ${method} ${route} に '${permission}' を設定しました。`);
-                changes++;
-            } else {
-                console.log(`  \x1b[33m[SKIP]\x1b[0m ${method} ${route} は既に設定済みか、対象が見つかりません。`);
-            }
+/**
+ * 指定されたユーザー名を持つ管理者に 'superadmin' ロールを割り当てる関数
+ * @param {string} username - 対象の管理者ユーザー名
+ * @param {function} [callback] - 処理完了後に実行されるコールバック
+ */
+function assignSuperadminRole(username, callback) {
+    const assignSql = `
+        INSERT OR IGNORE INTO admin_roles (admin_id, role_id)
+        SELECT
+            (SELECT id FROM admins WHERE username = ?),
+            (SELECT id FROM roles WHERE role_name = 'superadmin')
+    `;
+    db.run(assignSql, [username], function (err) {
+        if (err) {
+            console.error(`'${username}'へのロール割り当てエラー:`, err.message);
+        } else if (this.changes > 0) {
+            console.log(`管理者 '${username}' に 'superadmin' ロールを正常に割り当てました。`);
+        } else {
+            console.log(`管理者 '${username}' には既に 'superadmin' ロールが割り当てられています。`);
         }
-
-        console.log('\nファイルに書き込んでいます...');
-        fs.writeFileSync(serverJsPath, content, 'utf-8');
-
-        console.log(`\n\x1b[36m処理が完了しました。${changes}箇所の変更が行われました。\x1b[0m`);
-
-    } catch (error) {
-        console.error('\nエラーが発生しました:', error);
-    } finally {
-        rl.close();
-    }
-};
-
-main();
+        if (callback) callback();
+    });
+}

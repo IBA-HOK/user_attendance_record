@@ -7,8 +7,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const getTodayString = () => {
         const today = new Date();
-        today.setHours(today.getHours() + 9); // JSTに補正
-        return today.toISOString().split('T')[0];
+        // JSTに変換（時差9時間）
+        const jstOffset = 9 * 60 * 60 * 1000;
+        const jstDate = new Date(today.getTime() + jstOffset);
+        return jstDate.toISOString().split('T')[0];
     };
 
     const fetchUnaccountedStudents = async (date) => {
@@ -26,13 +28,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 table.style.display = 'table';
                 students.forEach(student => {
                     const tr = document.createElement('tr');
-                    tr.id = `row-${student.schedule_id}`;
+                    // IDは重複しないように user_id と slot_id を組み合わせる
+                    tr.id = `row-${student.user_id}-${student.slot_id}`;
                     tr.innerHTML = `
                         <td>${student.user_name} (ID: ${student.user_id})</td>
                         <td>${student.slot_name}</td>
                         <td class="actions">
                             <button class="attend-btn" data-user-id="${student.user_id}">出席として記録</button>
-                            <button class="absent-btn" data-schedule-id="${student.schedule_id}">欠席として記録</button>
+                            <button class="absent-btn" data-user-id="${student.user_id}" data-slot-id="${student.slot_id}">欠席として記録</button>
                         </td>
                     `;
                     tableBody.appendChild(tr);
@@ -59,14 +62,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const row = target.closest('tr');
         if (!row) return;
 
+        const userId = target.dataset.userId;
+        const targetDate = targetDateInput.value;
+
         if (target.classList.contains('attend-btn')) {
-            const userId = target.dataset.userId;
-            const targetDate = targetDateInput.value;
-
-            // ▼▼▼【修正点】選択した日付のタイムスタンプを生成して送信 ▼▼▼
-            // タイムゾーン問題を避けるため、お昼の12時でタイムスタンプを生成
             const logTimeForDate = new Date(`${targetDate}T12:00:00+09:00`).toISOString();
-
             try {
                 const response = await fetch('/api/entry_logs', {
                     method: 'POST',
@@ -74,7 +74,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({
                         user_id: userId,
                         log_type: 'entry',
-                        log_time: logTimeForDate // タイムスタンプをAPIに渡す
+                        log_time: logTimeForDate
                     })
                 });
                 if (!response.ok) throw new Error('出席記録に失敗');
@@ -83,14 +83,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (target.classList.contains('absent-btn')) {
-            const scheduleId = target.dataset.scheduleId;
+            const slotId = target.dataset.slotId;
+            if (!userId || !slotId) return;
+
             try {
-                const response = await fetch(`/api/schedules/${scheduleId}/status`, {
-                    method: 'PUT',
+                // ▼▼▼【修正点】呼び出すAPIと送信データを変更▼▼▼
+                const response = await fetch(`/api/live/make-absent`, {
+                    method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ status: '欠席' })
+                    body: JSON.stringify({
+                        user_id: userId,
+                        class_date: targetDate,
+                        slot_id: slotId
+                    })
                 });
-                if (!response.ok) throw new Error('欠席記録に失敗');
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || '欠席記録に失敗しました');
+                }
                 row.remove();
             } catch (error) { alert(`エラー: ${error.message}`); }
         }

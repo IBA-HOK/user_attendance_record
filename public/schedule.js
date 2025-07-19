@@ -1,5 +1,4 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // DOM要素の取得
     const searchInput = document.getElementById('student-search-input');
     const searchBtn = document.getElementById('student-search-btn');
     const searchResults = document.getElementById('student-search-results');
@@ -14,24 +13,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelSlotSelect = document.getElementById('cancel-slot-select');
     const transferMessage = document.getElementById('transfer-message');
     let selectedStudent = null;
-    let classSlots = [];
 
-    // --- 関数定義 ---
-const updateMakeupSlots = async () => {
-    const makeupDate = makeupDateInput.value;
-    makeupSlotSelect.innerHTML = '<option value="">日付を選択してください</option>';
-    if (!makeupDate) return;
-
-    // ▼▼▼ この日付の扱い方を修正 ▼▼▼
-    // タイムゾーンのズレを防ぐため、UTCとして日付を解釈し、曜日を取得する
-    const dateParts = makeupDate.split('-').map(part => parseInt(part, 10));
-    const date = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
-    const dayOfWeek = date.getUTCDay();
-
+    const updateMakeupSlots = async () => {
+        const makeupDate = makeupDateInput.value;
+        makeupSlotSelect.innerHTML = '<option value="">日付を選択してください</option>';
+        if (!makeupDate) return;
+        const dateParts = makeupDate.split('-').map(part => parseInt(part, 10));
+        const date = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+        const dayOfWeek = date.getUTCDay();
         try {
             const response = await fetch(`/api/class_slots?dayOfWeek=${dayOfWeek}`);
             const slots = await response.json();
-            
             makeupSlotSelect.innerHTML = '<option value="">コマを選択...</option>';
             if (slots.length > 0) {
                 slots.forEach(slot => {
@@ -43,11 +35,9 @@ const updateMakeupSlots = async () => {
             } else {
                 makeupSlotSelect.innerHTML = '<option value="">この曜日のコマはありません</option>';
             }
-        } catch (error) {
-            console.error("振替先コマの取得エラー:", error);
-        }
+        } catch (error) { console.error("振替先コマの取得エラー:", error); }
     };
-    // 生徒を検索して結果を表示
+
     const searchStudents = async () => {
         const query = searchInput.value.trim();
         if (!query) return;
@@ -67,47 +57,32 @@ const updateMakeupSlots = async () => {
             } else {
                 searchResults.textContent = '該当する生徒が見つかりません。';
             }
+        } catch (error) { console.error("生徒検索エラー:", error); }
+    };
+
+    const populateCancelSlots = async () => {
+        const date = cancelDateInput.value;
+        cancelSlotSelect.innerHTML = '<option value="">日付と生徒を選択してください</option>';
+        if (!date || !selectedStudent) return;
+        try {
+            const response = await fetch(`/api/users/${selectedStudent.id}/default-schedule?date=${date}`);
+            if (!response.ok) throw new Error('通常授業の取得に失敗しました。');
+            const schedule = await response.json();
+            cancelSlotSelect.innerHTML = '';
+            if (schedule && schedule.default_slot_id) {
+                const option = document.createElement('option');
+                option.value = schedule.default_slot_id;
+                option.textContent = schedule.slot_name;
+                cancelSlotSelect.appendChild(option);
+            } else {
+                cancelSlotSelect.innerHTML = '<option value="">この日の通常授業はありません</option>';
+            }
         } catch (error) {
-            console.error("生徒検索エラー:", error);
+            console.error("欠席コマの取得エラー:", error);
+            cancelSlotSelect.innerHTML = `<option value="">取得エラー</option>`;
         }
     };
 
-
-    // ▼▼▼ 欠席するコマのドロップダウンを生成する関数 ▼▼▼
-const populateCancelSlots = async () => {
-    const date = cancelDateInput.value;
-    if (!date || !selectedStudent) return;
-
-    try {
-        const response = await fetch(`/api/schedules?date=${date}&userId=${selectedStudent.id}&status=通常`);
-        const schedules = await response.json();
-        
-        // --- 重複排除の術 ---
-        const uniqueSchedules = [];
-        const seenSlotIds = new Set();
-        schedules.forEach(s => {
-            if (!seenSlotIds.has(s.slot_id)) {
-                uniqueSchedules.push(s);
-                seenSlotIds.add(s.slot_id);
-            }
-        });
-        // --------------------
-
-        cancelSlotSelect.innerHTML = '<option value="">コマを選択...</option>';
-        if (uniqueSchedules.length > 0) {
-            uniqueSchedules.forEach(s => {
-                const option = document.createElement('option');
-                option.value = s.schedule_id; // 代表として最初に見つかったschedule_idを使う
-                option.textContent = s.slot_name;
-                cancelSlotSelect.appendChild(option);
-            });
-        } else {
-            cancelSlotSelect.innerHTML = '<option value="">この日の通常授業はありません</option>';
-        }
-    } catch (error) { console.error("欠席コマの取得エラー:", error); }
-};
-
-    // ▼▼▼ 【修正】振替先の出席者リストを表示（重複排除ロジックを追加） ▼▼▼
     const updateRosterDisplay = async () => {
         const date = makeupDateInput.value;
         const slotId = makeupSlotSelect.value;
@@ -116,28 +91,19 @@ const populateCancelSlots = async () => {
             return;
         }
         try {
-            const response = await fetch(`/api/schedules?date=${date}&slotId=${slotId}`);
+            const response = await fetch(`/api/daily-roster?date=${date}`);
             const schedules = await response.json();
-            const roster = schedules.filter(s => s.status !== '欠席');
-            
-            // --- 重複排除の術 ---
-            const uniqueRoster = [];
-            const seenUserIds = new Set();
-            roster.forEach(item => {
-                if (!seenUserIds.has(item.user_id)) {
-                    uniqueRoster.push(item);
-                    seenUserIds.add(item.user_id);
-                }
-            });
-            // --------------------
-
+            const roster = schedules.filter(s => s.slot_id.toString() === slotId);
             rosterList.innerHTML = '';
-            if (uniqueRoster.length > 0) {
-                uniqueRoster.forEach(item => {
-                    const li = document.createElement('li');
-                    li.textContent = `${item.user_name} (ステータス: ${item.status})`;
-                    rosterList.appendChild(li);
+            if (roster.length > 0) {
+                roster.forEach(item => {
+                    if (item.user_id) {
+                        const li = document.createElement('li');
+                        li.textContent = `${item.user_name} (ステータス: ${item.status})`;
+                        rosterList.appendChild(li);
+                    }
                 });
+                if (rosterList.innerHTML === '') rosterList.textContent = 'まだ誰もいません。';
             } else {
                 rosterList.textContent = 'まだ誰もいません。';
             }
@@ -145,81 +111,56 @@ const populateCancelSlots = async () => {
         } catch (error) { console.error("出席者リストの取得エラー:", error); }
     };
 
-
-    // 振替を登録するコア処理
- const registerTransfer = async (e) => {
-    e.preventDefault();
-    if (!selectedStudent) return alert("生徒が選択されていません。");
-
-    const originalScheduleId = cancelSlotSelect.value;
-    const makeupDate = makeupDateInput.value;
-    const makeupSlotId = makeupSlotSelect.value;
-
-    if (!originalScheduleId) {
-        return alert("欠席にする元の授業コマを選択してください。");
-    }
-    if (!makeupDate || !makeupSlotId) {
-        return alert("振替先の授業日とコマを選択してください。");
-    }
-    
-    transferMessage.textContent = '';
-    transferMessage.className = 'message';
-
-    try {
-        // 1. 元のスケジュールを「欠席」に更新
-        const cancelResponse = await fetch(`/api/schedules/${originalScheduleId}/status`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ status: '欠席' })
-        });
-        if (!cancelResponse.ok) throw new Error('元の授業の欠席処理に失敗しました。');
-
-        // 2. 生徒のデフォルトPC情報を取得
-        const userResponse = await fetch(`/api/users/${selectedStudent.id}`);
-        if (!userResponse.ok) throw new Error('生徒情報の取得に失敗しました。');
-        const userData = await userResponse.json();
-        const assignedPcId = userData.default_pc_id;
-
-        // 3. 振替先のスケジュールを「振替」として新規作成
-        const newScheduleData = {
-            user_id: selectedStudent.id,
-            class_date: makeupDate,
-            slot_id: makeupSlotId,
-            status: '振替',
-            assigned_pc_id: assignedPcId || null // pcIdがなければnullを送る
-        };
-
-        const createResponse = await fetch('/api/schedules', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(newScheduleData)
-        });
-
-        if (!createResponse.ok) {
-            const errResult = await createResponse.json();
-            throw new Error(errResult.error || '振替先のスケジュール作成に失敗しました。');
+    const registerTransfer = async (e) => {
+        e.preventDefault();
+        if (!selectedStudent) return alert("生徒が選択されていません。");
+        const originalClassDate = cancelDateInput.value;
+        const makeupDate = makeupDateInput.value;
+        const makeupSlotId = makeupSlotSelect.value;
+        if (!originalClassDate || !makeupDate || !makeupSlotId) {
+            return alert("欠席日、振替日、振替先のコマをすべて選択してください。");
         }
+        transferMessage.textContent = '';
+        transferMessage.className = 'message';
+        try {
+            const userResponse = await fetch(`/api/users/${selectedStudent.id}`);
+            if (!userResponse.ok) throw new Error('生徒情報の取得に失敗しました。');
+            const userData = await userResponse.json();
+            const assignedPcId = userData.default_pc_id;
 
-        transferMessage.textContent = `${selectedStudent.name}さんの振替を正常に登録しました。`;
-        transferMessage.classList.add('success');
-        transferSection.style.display = 'none';
-        rosterSection.style.display = 'none';
-
-    } catch (error) {
-        transferMessage.textContent = `エラー: ${error.message}`;
-        transferMessage.classList.add('error');
-    }
-};
-
-    // --- イベントリスナー設定 ---
+            const newScheduleData = {
+                user_id: selectedStudent.id,
+                class_date: makeupDate,
+                slot_id: makeupSlotId,
+                status: '振替',
+                assigned_pc_id: assignedPcId || null,
+                notes: `(${originalClassDate} からの振替)`,
+                original_class_date: originalClassDate
+            };
+            const createResponse = await fetch('/api/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(newScheduleData)
+            });
+            if (!createResponse.ok) {
+                const errResult = await createResponse.json();
+                throw new Error(errResult.error || '振替スケジュール作成に失敗しました。');
+            }
+            transferMessage.textContent = `${selectedStudent.name}さんの振替を正常に登録しました。`;
+            transferMessage.classList.add('success');
+            transferSection.style.display = 'none';
+            rosterSection.style.display = 'none';
+            searchInput.value = '';
+            selectedStudent = null;
+        } catch (error) {
+            transferMessage.textContent = `エラー: ${error.message}`;
+            transferMessage.classList.add('error');
+        }
+    };
 
     searchBtn.addEventListener('click', searchStudents);
-    searchInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') searchStudents();
-    });
-    cancelDateInput.addEventListener('change', populateCancelSlots);
+    searchInput.addEventListener('keypress', (e) => { if (e.key === 'Enter') { e.preventDefault(); searchStudents(); } });
 
-    // 検索結果から生徒を選択
     searchResults.addEventListener('click', (e) => {
         if (e.target.classList.contains('search-result-item')) {
             selectedStudent = {
@@ -227,21 +168,19 @@ const populateCancelSlots = async () => {
                 name: e.target.dataset.userName,
             };
             transferFormTitle.textContent = `2. ${selectedStudent.name} さんの振替を登録`;
+            transferForm.reset();
+            transferMessage.textContent = '';
             transferSection.style.display = 'block';
-            searchResults.innerHTML = ''; // 検索結果をクリア
+            searchResults.innerHTML = '';
+            populateCancelSlots();
         }
     });
 
-    // 振替先のコマ/日付が変更されたら出席者リストを更新
+    cancelDateInput.addEventListener('change', populateCancelSlots);
     makeupDateInput.addEventListener('change', () => {
         updateMakeupSlots();
         updateRosterDisplay();
     });
     makeupSlotSelect.addEventListener('change', updateRosterDisplay);
-
-    // 振替登録フォームの送信
     transferForm.addEventListener('submit', registerTransfer);
-
-    // --- 初期化 ---
-    // fetchAllClassSlots();
 });
