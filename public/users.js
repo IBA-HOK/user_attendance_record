@@ -12,7 +12,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const editMessageArea = document.getElementById('edit-message');
     const closeEditModalBtn = editUserModal.querySelector('.close-btn');
     let currentEditingUserId = null;
-
+    const prefixInput = document.getElementById('id-prefix');
+    const savePrefixBtn = document.getElementById('save-prefix-btn');
+    const userIdInput = document.getElementById('user-id');
+    const PREFIX_STORAGE_KEY = 'userIdPrefix';
     // --- 関数定義 ---
     const populateSelect = async (url, selectElement, valueField, textFieldFn, defaultText) => {
         try {
@@ -43,6 +46,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
             userListBody.innerHTML = '';
             if (data.users && Array.isArray(data.users)) {
+                allUsers = data.users; // 全ユーザーリストを更新
                 data.users.forEach(user => {
                     const tr = document.createElement('tr');
                     tr.dataset.user = JSON.stringify(user);
@@ -66,30 +70,69 @@ document.addEventListener('DOMContentLoaded', () => {
             userListBody.innerHTML = `<tr><td colspan="7" class="error">データ読み込みに失敗しました。</td></tr>`;
         }
     };
+    const loadPrefix = () => {
+        const savedPrefix = localStorage.getItem(PREFIX_STORAGE_KEY);
+        if (savedPrefix) prefixInput.value = savedPrefix;
+    };
 
+    const savePrefix = () => {
+        const prefix = prefixInput.value.trim();
+        localStorage.setItem(PREFIX_STORAGE_KEY, prefix);
+        alert(`プリフィックス「${prefix}」を保存しました。`);
+    };
+    const generateNextAvailableId = () => {
+        const prefix = prefixInput.value.trim();
+        const existingNumbers = allUsers
+            .map(user => user.user_id)
+            .filter(id => id && id.startsWith(prefix))
+            .map(id => parseInt(id.substring(prefix.length), 10))
+            .filter(num => !isNaN(num) && num > 0);
+
+        let nextNumber = 1;
+        if (existingNumbers.length > 0) {
+            const sortedNumbers = [...new Set(existingNumbers)].sort((a, b) => a - b);
+            for (const num of sortedNumbers) {
+                if (num === nextNumber) {
+                    nextNumber++;
+                } else {
+                    break;
+                }
+            }
+        }
+        return(prefix + (`${nextNumber}`).padStart(4, '0'));
+    };
     // --- イベントリスナー設定 ---
+    savePrefixBtn.addEventListener('click', savePrefix);
+    // generateIdBtn.addEventListener('click', generateUserId);
     userForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         messageArea.textContent = '';
         messageArea.className = 'message';
+
+        let userId = userIdInput.value.trim();
+        if (userId === '') {
+            userId = generateNextAvailableId();
+        }
+
         const formData = {
-            user_id: document.getElementById('user-id').value,
+            user_id: userId,
             name: document.getElementById('name').value,
             email: document.getElementById('email').value,
             user_level: document.getElementById('user-level').value,
             default_pc_id: pcSelect.value || null,
             default_slot_id: slotSelect.value || null,
         };
+
         try {
-            const response = await fetch('/api/users', {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(formData),
-            });
+            const response = await fetch('/api/users', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formData) });
             const result = await response.json();
             if (!response.ok) throw new Error(result.error);
-            messageArea.textContent = `ユーザー「${formData.name}」を登録しました。`;
+            messageArea.textContent = `ユーザー「${formData.name}」(ID: ${formData.user_id}) を登録しました。`;
             messageArea.classList.add('success');
             userForm.reset();
-            fetchUsers();
+            loadPrefix()
+            prefixInput.value = localStorage.getItem(PREFIX_STORAGE_KEY) || '';
+            await fetchUsers(); // ユーザーリストを再取得してallUsersを更新
         } catch (error) {
             messageArea.textContent = `エラー: ${error.message}`;
             messageArea.classList.add('error');
@@ -166,6 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
             populateSelect('/api/class_slots', editSlotSelect, 'slot_id', 'slot_name', 'コマを選択')
         ]);
         fetchUsers();
+        loadPrefix()
     };
 
     initializePage();
