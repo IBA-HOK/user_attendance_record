@@ -1,100 +1,125 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-    <link rel="icon" href="/favicon.ico">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ユーザー管理</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        /* この画面専用のスタイル */
+        .id-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        .id-input-group input {
+            flex-grow: 1;
+        }
+        .prefix-setting-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+    </style>
 </head>
-
 <body>
-    <div class="container">
-        <h1>ユーザー管理</h1>
-        <p><a href="/index.html">トップページへ</a></p>
+<div class="container">
+    <h1>ユーザー管理</h1>
+    <p><a href="/index.html">トップページへ</a></p>
 
-        <div class="form-container">
-            <h2>新規ユーザー登録</h2>
-            <form id="user-form">
-                <input type="text" id="user-id" placeholder="ユーザーID" required>
-                <input type="text" id="name" placeholder="名前" required>
-                <input type="email" id="email" placeholder="メールアドレス (任意)">
-                <select id="user-level" required>
+    <div class="form-container">
+        <h2>新規ユーザー登録</h2>
+
+        <div class="prefix-setting-group">
+            <label for="id-prefix">IDプリフィックス:</label>
+            <input type="text" id="id-prefix" placeholder="例: Y">
+            <button type="button" id="save-prefix-btn">保存</button>
+        </div>
+
+        <form id="user-form">
+            <input type="text" id="name" placeholder="名前" required>
+            <input type="email" id="email" placeholder="メールアドレス (任意)">
+            <select id="user-level" required>
+                <option value="基礎">基礎</option>
+                <option value="初級">初級</option>
+                <option value="中級">中級</option>
+                <option value="上級">上級</option>
+            </select>
+            <select id="default-pc">
+                <option value="">PCを選択...</option>
+            </select>
+            <select id="default-slot">
+                <option value="">通常授業コマを選択 (任意)...</option>
+            </select>
+            <div class="id-input-group">
+                <input type="text" id="user-id" placeholder="ユーザーID (空欄で自動生成)">
+            </div>
+            <button type="submit">登録する</button>
+        </form>
+        <p id="message" class="message"></p>
+    </div>
+
+    <div class="table-container">
+        <h2>ユーザー一覧</h2>
+        <table>
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>名前</th>
+                <th>レベル</th>
+                <th>メールアドレス</th>
+                <th>デフォルトPC</th>
+                <th>通常授業コマ</th>
+                <th>操作</th>
+            </tr>
+            </thead>
+            <tbody id="user-list-body">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div id="edit-user-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn">&times;</span>
+        <h2>ユーザー情報編集</h2>
+        <form id="edit-user-form">
+            <p><strong>ID:</strong> <span id="edit-user-id"></span></p>
+            <div class="form-group">
+                <label for="edit-name">名前:</label>
+                <input type="text" id="edit-name" required>
+            </div>
+            <div class="form-group">
+                <label for="edit-email">メールアドレス:</label>
+                <input type="email" id="edit-email">
+            </div>
+            <div class="form-group">
+                <label for="edit-user-level">レベル:</label>
+                <select id="edit-user-level" required>
                     <option value="基礎">基礎</option>
                     <option value="初級">初級</option>
                     <option value="中級">中級</option>
                     <option value="上級">上級</option>
                 </select>
-                <select id="default-pc">
-                    <option value="">PCを選択...</option>
-                </select>
-                <select id="default-slot">
-                    <option value="">通常授業コマを選択 (任意)...</option>
-                </select>
-                <button type="submit">登録する</button>
-            </form>
-            <p id="message" class="message"></p>
-        </div>
-
-        <div class="table-container">
-            <h2>ユーザー一覧</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>名前</th>
-                        <th>レベル</th>
-                        <th>メールアドレス</th>
-                        <th>デフォルトPC</th>
-                        <th>通常授業コマ</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody id="user-list-body">
-                </tbody>
-            </table>
-        </div>
+            </div>
+            <div class="form-group">
+                <label for="edit-default-pc">デフォルトPC:</label>
+                <select id="edit-default-pc"></select>
+            </div>
+            <div class="form-group">
+                <label for="edit-default-slot">通常授業コマ:</label>
+                <select id="edit-default-slot"></select>
+            </div>
+            <button type="submit">保存</button>
+        </form>
+        <p id="edit-message" class="message"></p>
     </div>
+</div>
 
-    <div id="edit-user-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn">&times;</span>
-            <h2>ユーザー情報編集</h2>
-            <form id="edit-user-form">
-                <p><strong>ID:</strong> <span id="edit-user-id"></span></p>
-                <div class="form-group">
-                    <label for="edit-name">名前:</label>
-                    <input type="text" id="edit-name" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit-email">メールアドレス:</label>
-                    <input type="email" id="edit-email">
-                </div>
-                <div class="form-group">
-                    <label for="edit-user-level">レベル:</label>
-                    <select id="edit-user-level" required>
-                        <option value="基礎">基礎</option>
-                        <option value="初級">初級</option>
-                        <option value="中級">中級</option>
-                        <option value="上級">上級</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="edit-default-pc">デフォルトPC:</label>
-                    <select id="edit-default-pc"></select>
-                </div>
-                <div class="form-group">
-                    <label for="edit-default-slot">通常授業コマ:</label>
-                    <select id="edit-default-slot"></select>
-                </div>
-                <button type="submit">保存</button>
-            </form>
-            <p id="edit-message" class="message"></p>
-        </div>
-    </div>
-
-    <script src="users.js"></script>
+<script src="users.js"></script>
 </body>
-
 </html>
