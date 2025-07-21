@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <title>総合管理システム ガイドブック</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 800px;
+        }
+        h1, h2, h3 {
+            border-bottom-color: #dee2e6;
+        }
+        h3 {
+            margin-top: 30px;
+            border-bottom: 1px solid #e9ecef;
+        }
+        code {
+            background-color: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        }
+        .warning {
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+
+<body>
+<div class="container">
+    <h1>総合管理システム ガイドブック</h1>
+
+    <h2>序章：はじめに</h2>
+    <p>
+        このガイドブックは、塾運営・総合管理システムの全機能について解説するものです。日々の業務からシステム管理まで、この一冊で全ての操作を網羅します。
+    </p>
+
+    <h2>第一章：日常業務</h2>
+    <p>この章では、日々の授業運営中や業務の終わりに利用する、中心的な機能について解説します。</p>
+
+    <h3>1-1. ライブ出席状況の確認 (live-dashboard.html)</h3>
+    <p><strong>【目的】</strong> 現在進行中の授業について、「誰が出席予定か」「実際に出席しているか」をリアルタイムで把握するための、メインの監視画面です。</p>
+    <p><strong>【アクセス方法】</strong> ログイン後、ポータルページの「ライブ出席状況」からアクセスします。<br>
+        直接URL: <code>http://example.local/live-dashboard.html</code></p>
+    <p><strong>【主な機能】</strong></p>
+    <ul>
+        <li>現在時刻に該当する授業名と時間を自動で表示します。</li>
+        <li>その授業に出席予定の生徒を、カード形式で一覧表示します。</li>
+        <li>各生徒の出欠状況が、カードの色（出席済みは緑、未入室はオレンジ）で視覚的にわかります。</li>
+        <li>「出席を記録」ボタンで、手動で生徒を入室済みにできます。</li>
+        <li>「出席を取り消し」ボタンで、誤って記録した出席を取り消せます。</li>
+        <li>「欠席にする」ボタンで、その日の授業を「欠席」として確定できます。</li>
+    </ul>
+
+    <h3>1-2. 出席漏れ一括処理 (batch-process.html)</h3>
+    <p><strong>【目的】</strong> QRコードの読み取り忘れなどで入室記録がない生徒を、一日の終わりにまとめて処理するための画面です。その日に「出席予定だったが、記録がない」生徒だけをリストアップします。</p>
+    <p><strong>【アクセス方法】</strong> ログイン後、ポータルページの「未出席生徒」からアクセスします。<br>
+        直接URL: <code>http://example.local/batch-process.html</code></p>
+    <p><strong>【操作手順】</strong></p>
+    <ol>
+        <li>画面上部の日付選択カレンダーで、確認したい日付を選択します。（初期状態では今日の日付が選択されています）</li>
+        <li>「<strong>表示</strong>」ボタンをクリックすると、対象者が一覧で表示されます。</li>
+        <li>各生徒の行の右側にあるボタンで、処理を確定します。
+            <ul>
+                <li><strong>実は出席していた場合:</strong> 「<strong>出席として記録</strong>」ボタンをクリックします。</li>
+                <li><strong>やはり欠席だった場合:</strong> 「<strong>欠席として記録</strong>」ボタンをクリックします。</li>
+            </ul>
+        </li>
+    </ol>
+
+    <h2>第二章：生徒情報の管理 (users.html)</h2>
+    <p><strong>【目的】</strong> この画面は、塾に所属する全ての生徒の情報を一元管理するための中心的な機能です。生徒の新規追加、既存情報の更新、削除、そして各生徒の基本となる通常授業のスケジュール設定など、生徒情報に関する全ての操作をここで行います。</p>
+    <p><strong>【アクセス方法】</strong> ログイン後、ポータルページの「ユーザー管理」リンクからアクセスします。<br>
+        直接URL: <code>http://example.local/users.html</code></p>
+    <p><strong>【主な機能】</strong></p>
+    <ul>
+        <li>新規生徒の登録（IDプリフィックスからの自動採番機能あり）</li>
+        <li>全生徒の一覧表示と情報詳細ページへのリンク</li>
+        <li>既存生徒の情報（名前, レベル, メール, デフォルトPC, 通常授業コマ）の編集</li>
+        <li>生徒情報の削除</li>
+    </ul>
+    <div class="warning">
+        <strong>注意:</strong> 生徒を削除すると、その生徒に関連する全てのスケジュールと入退室ログもデータベースから削除されます。この操作は元に戻すことができません。
+    </div>
+
+    <h2>第三章：授業スケジュールの管理</h2>
+
+    <h3>3-1. 振替の新規登録 (schedule.html)</h3>
+    <p><strong>【目的】</strong> 生徒が本来の授業を欠席し、別の授業に「振替」として参加する予定を登録するために使用します。</p>
+    <p><strong>【アクセス方法】</strong> ポータルページの「振替登録」からアクセスします。<br>
+        直接URL: <code>http://example.local/schedule.html</code></p>
+    <p><strong>【操作手順】</strong></p>
+    <ol>
+        <li><strong>生徒の選択:</strong> 検索窓に生徒の名前を入力し、「検索」ボタンを押して対象の生徒をクリックします。</li>
+        <li><strong>元の授業の指定:</strong> 「元の授業（欠席にする）」セクションで、生徒が休む授業の「日付」を選択します。</li>
+        <li><strong>振替先の授業の指定:</strong> 「振替先の授業」セクションで、振替として参加する授業の「日付」と「コマ」を選択します。</li>
+        <li><strong>登録の実行:</strong> 「この内容で振替を登録」ボタンを押すと、元の授業が「欠席」に、新しい授業が「振替」として記録されます。</li>
+    </ol>
+
+    <h3>3-2. 一括欠席登録 (bulk-absence.html)</h3>
+    <p><strong>【目的】</strong> 特定の生徒の未来の通常授業を一覧表示し、複数日分をまとめて「欠席」として登録します。病気や旅行などで長期的に休む場合に便利です。</p>
+    <p><strong>【アクセス方法】</strong> ポータルページの「一括欠席登録」からアクセスします。<br>
+        直接URL: <code>http://example.local/bulk-absence.html</code></p>
+
+    <h3>3-3. 全スケジュールの管理 (schedule-admin.html)</h3>
+    <p><strong>【目的】</strong> 全ての生徒の、全てのスケジュール（通常, 振替, 欠席）を一覧で確認し、検索・編集・削除・新規追加を行う、最も強力な管理画面です。</p>
+    <p><strong>【アクセス方法】</strong> ポータルページの「全スケジュール管理」からアクセスします。<br>
+        直接URL: <code>http://example.local/schedule-admin.html</code></p>
+
+    <h2>第四章：マスターデータの管理</h2>
+
+    <h3>4-1. PCの管理 (pcs.html)</h3>
+    <p><strong>【目的】</strong> 塾で使用する全てのパソコンを台帳として登録・管理するための画面です。ここで登録したPCが、生徒情報編集時の「デフォルトPC」として選択可能になります。</p>
+    <p><strong>【アクセス方法】</strong> ポータルページの「PC管理」からアクセスします。<br>
+        直接URL: <code>http://example.local/pcs.html</code></p>
+
+    <h3>4-2. 授業コマの管理 (class-slots.html)</h3>
+    <p><strong>【目的】</strong> 塾の基本的な時間割、「月曜1限」「火曜2限」といった「授業の枠」を定義・管理するための画面です。</p>
+    <p><strong>【アクセス方法】</strong> ポータルページの「授業コマ管理」からアクセスします。<br>
+        直接URL: <code>http://example.local/class-slots.html</code></p>
+    <div class="warning">
+        <strong>最重要警告:</strong> コマを削除すると、そのコマに紐づく<strong>全てのスケジュール（過去・未来の通常授業や振替の記録）も、連鎖してデータベースから完全に削除されます。</strong> この操作は元に戻せないため、コマの削除は細心の注意を払って行ってください。
+    </div>
+
+    <h2>第五章：システム管理</h2>
+
+    <h3>5-1. 管理者と権限の管理 (admins.html, roles.html)</h3>
+    <p><strong>【目的】</strong> システムにログインする管理者アカウントと、その権限（ロール）を管理します。</p>
+    <p><strong>【アクセス方法】</strong> ポータルページの「管理者設定」「ロール・権限設定」からアクセスします。</p>
+    <ul>
+        <li><strong>ロール・権限設定 (roles.html):</strong>
+            <ul>
+                <li>「生徒閲覧」「スケジュール管理」などの権限をグループ化した「ロール」（例：一般講師、教室長）を作成・編集します。</li>
+            </ul>
+        </li>
+        <li><strong>管理者設定 (admins.html):</strong>
+            <ul>
+                <li>新しい管理者アカウントを作成し、作成済みのロールを割り当てます。</li>
+            </ul>
+        </li>
+    </ul>
+
+    <h3>5-2. データのエクスポートとインポート (backup.html)</h3>
+    <p><strong>【目的】</strong> データベース全体のバックアップを作成したり、バックアップからデータを復元したりするための機能です。</p>
+    <p><strong>【アクセス方法】</strong> ポータルページの「バックアップ」からアクセスします。<br>
+        直接URL: <code>http://example.local/backup.html</code></p>
+    <div class="warning">
+        <strong>最重要警告:</strong> インポート操作は、現在のデータベースにある全てのデータを完全に削除し、アップロードしたファイルの内容で上書きします。この操作は<strong>絶対に元に戻せません。</strong>
+    </div>
+</div>
+</body>
+</html>
