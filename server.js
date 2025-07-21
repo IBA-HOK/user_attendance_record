@@ -476,17 +476,22 @@ function createApp(db) {
     });
 
     app.post('/api/users', checkPermission('manage_users'), (req, res) => {
-        // ▼▼▼ default_slot_id を受け取る ▼▼▼
         const { user_id, name, email, user_level, default_pc_id, default_slot_id } = req.body;
-        if (!user_id || !name) return res.status(400).json({ error: "IDと名前は必須" });
-
-        // ▼▼▼ SQLに default_slot_id を追加 ▼▼▼
+        if (!user_id || !name) return res.status(400).json({ error: "IDと名前は必須です。" });
         const sql = 'INSERT INTO users (user_id, name, email, user_level, default_pc_id, default_slot_id) VALUES (?, ?, ?, ?, ?, ?)';
-        db.run(sql, [user_id, name, email, user_level, default_pc_id, default_slot_id], (err) => {
-            // ...エラーハンドリング...
-            res.status(201).json({ user_id });
+        db.run(sql, [user_id, name, email, user_level, default_pc_id, default_slot_id], function(err) {
+            if (err) {
+                // Check if the error is a unique constraint violation
+                if (err.code === 'SQLITE_CONSTRAINT') {
+                    return res.status(409).json({ error: 'ユーザーIDが重複しています。' }); // 409 Conflict
+                }
+                return res.status(500).json({ error: 'データベースエラー: ' + err.message });
+            }
+            // Return the provided user_id on success
+            res.status(201).json({ user_id: user_id });
         });
     });
+
 
     app.put('/api/users/:id', checkPermission('manage_users'), (req, res) => {
         const { name, email, user_level, default_pc_id, default_slot_id } = req.body;

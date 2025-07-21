@@ -38,7 +38,36 @@ document.addEventListener('DOMContentLoaded', () => {
             console.error(`${defaultText}の取得に失敗:`, error);
         }
     };
+    const attemptToCreateUser = async (formData, retries = 5) => {
+        if (retries <= 0) {
+            throw new Error("IDの自動生成に5回失敗しました。サーバーが混み合っているか、IDが枯渇している可能性があります。");
+        }
+        if (!formData.user_id) {
+            await fetchUsers();
+            formData.user_id = generateNextAvailableId();
+        }
+        try {
+            const response = await fetch('/api/users', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(formData)
+            });
 
+            if (!response.ok) {
+                // ID重複エラー(409)の場合のみ再試行
+                if (response.status === 409) {
+                    console.warn(`ID ${formData.user_id} が衝突しました。再試行します...`);
+                    return attemptToCreateUser({ ...formData, user_id: null }, retries - 1);
+                } else {
+                    const result = await response.json();
+                    throw new Error(result.error); // その他のエラー
+                }
+            }
+            return await response.json();
+        } catch (error) {
+            throw error;
+        }
+    };
     const fetchUsers = async () => {
         try {
             const response = await fetch('/api/users');
@@ -109,13 +138,8 @@ document.addEventListener('DOMContentLoaded', () => {
         messageArea.textContent = '';
         messageArea.className = 'message';
 
-        let userId = userIdInput.value.trim();
-        if (userId === '') {
-            userId = generateNextAvailableId();
-        }
-
         const formData = {
-            user_id: userId,
+            user_id: userIdInput.value.trim(), // 手動入力されたID、または空文字列
             name: document.getElementById('name').value,
             email: document.getElementById('email').value,
             user_level: document.getElementById('user-level').value,
@@ -124,21 +148,19 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         try {
-            const response = await fetch('/api/users', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(formData) });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error);
-            messageArea.textContent = `ユーザー「${formData.name}」(ID: ${formData.user_id}) を登録しました。`;
+            // IDの自動生成と登録処理を呼び出す
+            const result = await attemptToCreateUser(formData);
+
+            messageArea.textContent = `ユーザー「${formData.name}」(ID: ${result.user_id}) を登録しました。`;
             messageArea.classList.add('success');
             userForm.reset();
-            loadPrefix()
-            prefixInput.value = localStorage.getItem(PREFIX_STORAGE_KEY) || '';
-            await fetchUsers(); // ユーザーリストを再取得してallUsersを更新
+            loadPrefix();
+            await fetchUsers();
         } catch (error) {
             messageArea.textContent = `エラー: ${error.message}`;
             messageArea.classList.add('error');
         }
     });
-
     userListBody.addEventListener('click', async (e) => {
         const target = e.target;
         const tr = target.closest('tr');
