@@ -1042,69 +1042,69 @@ function createApp(db) {
             res.json(row || null);
         });
     });
-    app.get('/api/unaccounted', checkPermission('view_schedules'), (req, res) => {
+    app.get('/api/unaccounted', checkPermission('view_schedules'), async (req, res) => {
         const { date } = req.query;
         if (!date) {
             return res.status(400).json({ error: "日付が指定されていません。" });
         }
-
-        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-
-        const rosterPromise = new Promise((resolve, reject) => {
-            // STEP 1: 差分取得
-            const diffSql = `SELECT * FROM schedules WHERE class_date = ?`;
-            db.all(diffSql, [date], (err, diffSchedules) => {
-                if (err) return reject(err);
-
-                const absentUserIds = new Set(diffSchedules.filter(s => s.status === '欠席').map(s => s.user_id));
-                const makeupSchedules = diffSchedules.filter(s => s.status !== '欠席');
-                const makeupUserIds = new Set(makeupSchedules.map(s => s.user_id));
-
-                // STEP 2: ベース取得
-                const baseSql = `
-                SELECT u.user_id, u.name as user_name, c.slot_id, c.slot_name, c.period
-                FROM users u
-                JOIN class_slots c ON u.default_slot_id = c.slot_id
-                WHERE c.day_of_week = ?
-            `;
-                db.all(baseSql, [dayOfWeek], (err, baseStudents) => {
-                    if (err) return reject(err);
-
-                    // STEP 3: 結合
-                    let finalRoster = [];
-                    finalRoster.push(...makeupSchedules);
-                    baseStudents.forEach(student => {
-                        if (!absentUserIds.has(student.user_id) && !makeupUserIds.has(student.user_id)) {
-                            finalRoster.push(student);
-                        }
-                    });
-                    resolve(finalRoster);
-                });
+    
+        try {
+            const dateParts = date.split('-').map(part => parseInt(part, 10));
+            const utcDate = new Date(Date.UTC(dateParts[0], dateParts[1] - 1, dateParts[2]));
+            const dayOfWeek = utcDate.getUTCDay();
+    
+            // STEP 1: その日の差分スケジュールを、生徒名・コマ名付きで取得
+            const diffSchedules = await new Promise((resolve, reject) => {
+                const sql = `
+                    SELECT s.*, u.name as user_name, c.slot_name 
+                    FROM schedules s 
+                    JOIN users u ON s.user_id = u.user_id 
+                    JOIN class_slots c ON s.slot_id = c.slot_id 
+                    WHERE s.class_date = ?`;
+                db.all(sql, [date], (err, rows) => err ? reject(err) : resolve(rows));
             });
-        });
+    
+            const diffUserSlotPairs = new Set(diffSchedules.map(s => `${s.user_id}-${s.slot_id}`));
+    
+            // STEP 2: その曜日に通常授業がある生徒を取得
+            const baseStudents = await new Promise((resolve, reject) => {
+                const sql = `
+                    SELECT u.user_id, u.name as user_name, u.default_slot_id as slot_id, 
+                           c.slot_name, c.period, '通常' as status
+                    FROM users u 
+                    JOIN class_slots c ON u.default_slot_id = c.slot_id 
+                    WHERE c.day_of_week = ?`;
+                db.all(sql, [dayOfWeek], (err, rows) => err ? reject(err) : resolve(rows));
+            });
+    
+            // STEP 3: データを結合してその日の全スケジュールを生成
+            let finalRoster = [...diffSchedules];
+            baseStudents.forEach(student => {
+                if (!diffUserSlotPairs.has(`${student.user_id}-${student.slot_id}`)) {
+                    finalRoster.push(student);
+                }
+            });
 
-        rosterPromise.then(roster => {
-            // STEP 4: 出欠記録がない生徒をフィルタリング
-            if (roster.length === 0) {
+            // STEP 4: 出席記録がある生徒を除外
+            const userIds = [...new Set(finalRoster.map(r => r.user_id))];
+            if (userIds.length === 0) {
                 return res.json([]);
             }
-
-            const userIds = roster.map(r => `'${r.user_id}'`).join(',');
-            const logSql = `SELECT user_id FROM entry_logs WHERE user_id IN (${userIds}) AND log_type = 'entry' AND date(log_time, '+9 hours') = ?`;
-
-            db.all(logSql, [date], (err, logs) => {
-                if (err) return res.status(500).json({ error: err.message });
-
-                const loggedInUserIds = new Set(logs.map(l => l.user_id));
-
-                const unaccountedStudents = roster.filter(student => !loggedInUserIds.has(student.user_id));
-
-                res.json(unaccountedStudents);
+            
+            const loggedInUserIds = await new Promise((resolve, reject) => {
+                const logSql = `SELECT user_id FROM entry_logs WHERE user_id IN (${userIds.map(()=>'?').join(',')}) AND log_type = 'entry' AND date(log_time, '+9 hours') = ?`;
+                db.all(logSql, [...userIds, date], (err, rows) => err ? reject(err) : resolve(new Set(rows.map(l => l.user_id))));
             });
 
-        }).catch(err => {
-            res.status(500).json({ error: "未処理者リストの生成中にエラーが発生しました: " + err.message });
-        });
+            const unaccountedStudents = finalRoster
+                .filter(student => !loggedInUserIds.has(student.user_id) && student.status !== '欠席')
+                .sort((a, b) => a.period - b.period || a.user_name.localeCompare(b.user_name, 'ja'));
+
+            res.json(unaccountedStudents);
+    
+        } catch (error) {
+            res.status(500).json({ error: "未処理者リストの生成中にエラーが発生しました: " + error.message });
+        }
     });
 
     // --- 入退室ログ (entry_logs) API ---
