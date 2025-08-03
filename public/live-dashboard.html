@@ -1,13 +1,19 @@
 <!DOCTYPE html>
 <html lang="ja">
-
 <head>
-    <link rel="icon" href="/favicon.ico">
     <meta charset="UTF-8">
     <title>デイリー授業ボード</title>
     <link rel="stylesheet" href="styles.css">
+    <style>
+        .class-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 15px;
+            margin-top: 10px;
+        }
+    </style>
 </head>
-
 <body>
     <div class="container">
         <h1>デイリー授業ボード</h1>
@@ -24,13 +30,32 @@
                 <h3 id="current-class-info"></h3>
                 <button id="next-class-btn">次のコマ &gt;</button>
             </div>
-            <button id="refresh-btn" style="margin-top: 10px;">表示中のコマを更新</button>
+            <div class="class-controls">
+                <button id="refresh-btn">表示中のコマを更新</button>
+                <button id="add-transfer-btn">＋ 振替生徒を追加</button>
+            </div>
         </div>
 
         <div id="attendee-list-container"></div>
     </div>
 
+    <div id="transfer-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>振替生徒の追加</h2>
+            <p><strong>授業:</strong> <span id="transfer-class-info"></span></p>
+            <div class="form-container">
+                <div class="student-search">
+                    <input type="text" id="student-search-input" placeholder="生徒の名前またはIDで検索">
+                    <button type="button" id="student-search-btn">検索</button>
+                </div>
+                <div id="student-search-results" class="search-results-list">
+                    </div>
+            </div>
+            <p id="transfer-message" class="message"></p>
+        </div>
+    </div>
+
     <script src="live-dashboard.js"></script>
 </body>
-
 </html>
