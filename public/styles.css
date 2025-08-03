@@ -296,3 +296,11 @@ td.actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .permissions-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
 .permission-item { display: flex; align-items: center; gap: 8px; }
 .permission-item input { width: auto; }
+
+.search-results-list {
+    margin-top: 15px;
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+}
