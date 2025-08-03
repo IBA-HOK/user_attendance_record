@@ -7,6 +7,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevClassBtn = document.getElementById('prev-class-btn');
     const nextClassBtn = document.getElementById('next-class-btn');
     const refreshBtn = document.getElementById('refresh-btn');
+    const addTransferBtn = document.getElementById('add-transfer-btn');
+    const transferModal = document.getElementById('transfer-modal');
+    const closeTransferModalBtn = transferModal.querySelector('.close-btn');
+    const transferClassInfo = document.getElementById('transfer-class-info');
+    const searchInput = document.getElementById('student-search-input');
+    const searchBtn = document.getElementById('student-search-btn');
+    const searchResults = document.getElementById('student-search-results');
+    const transferMessage = document.getElementById('transfer-message');
+
     let displayedDate = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
     let dailyClasses = [];
     let currentClassIndex = -1;
