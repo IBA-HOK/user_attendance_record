@@ -147,7 +147,95 @@ document.addEventListener('DOMContentLoaded', () => {
             classInfoElem.textContent = '取得失敗';
         }
     };
+    const openTransferModal = () => {
+        if (currentClassIndex < 0 || currentClassIndex >= dailyClasses.length) {
+            alert('追加対象の授業が選択されていません。');
+            return;
+        }
+        const classData = dailyClasses[currentClassIndex];
+        transferClassInfo.textContent = `${formatDate(displayedDate)} ${classData.slot_name}`;
+        searchInput.value = '';
+        searchResults.innerHTML = '';
+        transferMessage.textContent = '';
+        transferMessage.className = 'message';
+        transferModal.style.display = 'block';
+    };
 
+    const searchStudents = async () => {
+        const query = searchInput.value.trim();
+        if (!query) return;
+        try {
+            const response = await fetch(`/api/users?name=${query}`);
+            const data = await response.json();
+            searchResults.innerHTML = '';
+            if (data.users && data.users.length > 0) {
+                data.users.forEach(user => {
+                    const div = document.createElement('div');
+                    div.className = 'search-result-item';
+                    div.textContent = `${user.name} (ID: ${user.user_id})`;
+                    div.dataset.userId = user.user_id;
+                    searchResults.appendChild(div);
+                });
+            } else {
+                searchResults.textContent = '該当する生徒が見つかりません。';
+            }
+        } catch (error) {
+            console.error("生徒検索エラー:", error);
+            searchResults.textContent = '検索中にエラーが発生しました。';
+        }
+    };
+
+    addTransferBtn.addEventListener('click', openTransferModal);
+    closeTransferModalBtn.addEventListener('click', () => transferModal.style.display = 'none');
+    searchBtn.addEventListener('click', searchStudents);
+    searchInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); searchStudents(); }
+    });
+    searchResults.addEventListener('click', (e) => {
+        if (e.target.classList.contains('search-result-item')) {
+            const userId = e.target.dataset.userId;
+            if (confirm(`${e.target.textContent} をこの授業に振替として追加しますか？`)) {
+                addTransferStudent(userId);
+            }
+        }
+    });
+    window.addEventListener('click', (e) => {
+        if (e.target == transferModal) {
+            transferModal.style.display = 'none';
+        }
+    });
+    
+    const addTransferStudent = async (userId) => {
+        const classData = dailyClasses[currentClassIndex];
+        const scheduleData = {
+            user_id: userId,
+            class_date: formatDate(displayedDate),
+            slot_id: classData.slot_id,
+            status: '振替',
+            notes: '当日追加'
+        };
+
+        try {
+            const response = await fetch('/api/schedules', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(scheduleData)
+            });
+            if (!response.ok) {
+                const result = await response.json();
+                throw new Error(result.error || '登録に失敗しました');
+            }
+            transferMessage.textContent = '生徒を追加しました。';
+            transferMessage.className = 'message success';
+            // 成功したらリストを更新し、モーダルは開けたままにする
+            loadDay(displayedDate);
+            searchResults.innerHTML = '';
+            searchInput.value = '';
+        } catch (error) {
+            transferMessage.textContent = `エラー: ${error.message}`;
+            transferMessage.className = 'message error';
+        }
+    };
     attendeeListContainer.addEventListener('click', async (e) => {
         const target = e.target;
         const userId = target.dataset.userId;
